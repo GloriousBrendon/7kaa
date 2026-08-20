@@ -101,6 +101,7 @@ public:
 	char			vga_keep_aspect_ratio;
 	char			vga_pause_on_focus_loss;
 	char			vga_scale_quality;   // see enum below
+	char			vga_vsync;           // request SDL_RENDERER_PRESENTVSYNC (default off, see reset())
 
 	int			vga_window_width;
 	int			vga_window_height;
@@ -128,8 +129,16 @@ public:
 	// everything else in the file, so an in-game change survives restart
 	int			persist_vga_scale_quality();
 
+	// same, for vga_vsync
+	int			persist_vga_vsync();
+
 private:
 	void			update_check_sum(char *name, char *value);
+
+	// shared implementation behind the persist_* helpers above: rewrite a
+	// single "key = value" line of config.txt in place, appending it if the
+	// key isn't present, and leaving every other line untouched
+	int			persist_setting(const char *key, const char *value);
 };
 
 //------------------------------------------//

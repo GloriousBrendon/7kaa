@@ -84,6 +84,7 @@ private:
 	int win_grab_user_mode;
 	int bound_x1, bound_y1, bound_x2, bound_y2;
 	int boundary_set;
+	char vsync_active;   // vsync the driver actually granted, not what was asked for
 
 public:
 	ColorTable*    vga_color_table;
@@ -124,6 +125,9 @@ public:
 	void   set_mouse_mode(MouseInputMode mode);
 	void   set_window_grab(WinGrab mode);
 	void   set_scale_quality(char mode);
+	int    set_vsync(char enable);
+	char   is_vsync_granted();
+	char   is_vsync_active()  { return vsync_active; }
 	void   flip();
 	void   save_status_report();
 

@@ -80,13 +80,14 @@ static void disp_slide_bar(SlideBar *slideBar, int);
 #define IGOPTION_DRAW_PATH       0x00000200
 #define IGOPTION_MAP_ID          0x00000400
 #define IGOPTION_SCALE_QUALITY   0x00000800
+#define IGOPTION_VSYNC           0x00001000
 #define IGOPTION_PAGE            0x40000000
 #define IGOPTION_ALL             0x7FFFFFFF
 
 
 
 OptionMenu::OptionMenu() : help_group(3), news_group(2), report_group(2) ,
-	show_icon_group(2), show_path_group(4), scale_quality_group(3)
+	show_icon_group(2), show_path_group(4), scale_quality_group(3), vsync_group(2)
 
 {
 	active_flag = 0;
@@ -198,8 +199,26 @@ void OptionMenu::enter(char untilExitFlag)
 		}
 	}
 
+	// --------- initialize vsync button group ---------- //
+
+	{
+		const char* vsync_label[2] = { _("On"), _("Off") };
+		const int bx1 = 572, by1 = 480, bw = 74, bh = 21, gap = 2;
+
+		for( i = 0; i < 2; ++i )
+		{
+			vsync_group[i].create( bx1+i*(bw+gap), by1,
+				bx1+i*(bw+gap)+bw-1, by1+bh-1,
+				ButtonCustom::disp_text_button_func,
+				ButtonCustomPara((void*)vsync_label[i], 1-i), 0, 0 );
+		}
+	}
+
 	old_scale_quality = config_adv.vga_scale_quality;
 	scale_quality_changed = 0;
+
+	old_vsync = config_adv.vga_vsync;
+	vsync_changed = 0;
 
 	// --------- other buttons --------//
 	start_button.create(200, 520, "RETURN-U", "RETURN-D", 1, 0);
@@ -245,6 +264,7 @@ void OptionMenu::disp(int needRepaint)
 
 			vga.use_back();
 			font_san.put(572, 358, _("Scale Filter"));
+			font_san.put(572, 458, _("V-Sync"));
 			vga.use_front();
 
 			vga_util.blt_buf(0,0,VGA_WIDTH-1,VGA_HEIGHT-1,0);
@@ -303,6 +323,13 @@ void OptionMenu::disp(int needRepaint)
 		if( refresh_flag & IGOPTION_SCALE_QUALITY )
 		{
 			scale_quality_group.paint(config_adv.vga_scale_quality);
+		}
+		if( refresh_flag & IGOPTION_VSYNC )
+		{
+			// paint() takes a button INDEX, not a custom_para value; this
+			// group is ordered { On, Off } with values { 1, 0 }, so the
+			// index is the complement -- same idiom as show_icon_group above
+			vsync_group.paint(1 - config_adv.vga_vsync);
 		}
 
 		refresh_flag = 0;
@@ -411,6 +438,13 @@ int OptionMenu::detect()
 		vga.set_scale_quality( (char) scale_quality_group[scale_quality_group()].custom_para.value );
 		scale_quality_changed = 1;
 	}
+	else if( vsync_group.detect() >= 0)
+	{
+		// stores the preference even when the driver won't grant it, so the
+		// request survives to a machine/driver that can honor it
+		vga.set_vsync( (char) vsync_group[vsync_group()].custom_para.value );
+		vsync_changed = 1;
+	}
 	else if( start_button.detect(KEY_RETURN) )
 	{
 		if( &config != &tempConfig)
@@ -430,6 +464,9 @@ int OptionMenu::detect()
 
 		if( scale_quality_changed )
 			config_adv.persist_vga_scale_quality();
+
+		if( vsync_changed )
+			config_adv.persist_vga_vsync();
 	}
 	else if( cancel_button.detect(KEY_ESC) )
 	{
@@ -437,6 +474,9 @@ int OptionMenu::detect()
 
 		if( scale_quality_changed )
 			vga.set_scale_quality(old_scale_quality);
+
+		if( vsync_changed )
+			vga.set_vsync(old_vsync);
 
 		exit(0);
 	}

@@ -57,6 +57,7 @@ Vga::Vga()
    texture = NULL;
    renderer = NULL;
    window = NULL;
+   vsync_active = 0;
 }
 //-------- End of function Vga::Vga ----------//
 
@@ -108,9 +109,18 @@ int Vga::init()
    if( config_adv.vga_full_screen )
       set_window_grab(WINGRAB_ON);
 
-   renderer = SDL_CreateRenderer(window, -1, 0);
+   // Request vsync when configured. SDL2 may refuse it outright (renderer
+   // creation fails) or accept the call but not actually grant the flag,
+   // depending on the driver -- handle both: retry without the flag if
+   // creation failed, then read back what was really granted.
+   renderer = SDL_CreateRenderer(window, -1,
+                                 config_adv.vga_vsync ? SDL_RENDERER_PRESENTVSYNC : 0);
+   if( !renderer && config_adv.vga_vsync )
+      renderer = SDL_CreateRenderer(window, -1, 0);
    if( !renderer )
       return 0;
+
+   vsync_active = is_vsync_granted();
 
    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, ConfigAdv::vga_scale_quality_name(config_adv.vga_scale_quality));
    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
@@ -222,6 +232,65 @@ void Vga::set_scale_quality(char mode)
    // next flip() re-uploads target->pixels into the new texture unconditionally
 }
 //-------- End of function Vga::set_scale_quality ----------//
+
+
+//-------- Begin of function Vga::is_vsync_granted ----------//
+//
+// Whether the renderer actually presents on vblank right now, as opposed to
+// what was merely asked for. Same capability check save_status_report() has
+// always used to report vsync state.
+//
+char Vga::is_vsync_granted()
+{
+   SDL_RendererInfo info;
+
+   if( !renderer || SDL_GetRendererInfo(renderer, &info) != 0 )
+      return 0;
+
+   return (info.flags & SDL_RENDERER_PRESENTVSYNC) ? 1 : 0;
+}
+//-------- End of function Vga::is_vsync_granted ----------//
+
+
+//-------- Begin of function Vga::set_vsync ----------//
+//
+// Toggle vsync live. SDL_RenderSetVSync() exists only from SDL 2.0.18; on
+// older SDL the new setting is only stored, taking effect on the next run,
+// since the flag can otherwise be chosen only at renderer-creation time.
+//
+// Returns 1 if vsync is in the requested state now, 0 if the change needs a
+// restart or the driver refused it. The setting is stored either way -- an
+// unsupported request must not break rendering, and it should still survive
+// to a machine/driver that can honor it.
+//
+int Vga::set_vsync(char enable)
+{
+   config_adv.vga_vsync = enable ? 1 : 0;
+
+   if( !renderer )
+      return 0;
+
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+   // Deliberately NOT is_vsync_granted() here: SDL_GetRendererInfo()'s
+   // PRESENTVSYNC flag is a snapshot of the creation-time flags and is not
+   // refreshed by SDL_RenderSetVSync() (verified against SDL 2.32 -- the
+   // flag still reads "on" after a successful SDL_RenderSetVSync(r, 0)).
+   // The call's own return code is the only trustworthy answer at runtime.
+   if( SDL_RenderSetVSync(renderer, config_adv.vga_vsync) == 0 )
+   {
+      vsync_active = config_adv.vga_vsync;
+      return 1;
+   }
+   ERR("Could not change vsync: %s\n", SDL_GetError());
+#endif
+
+   // No runtime support, or the driver refused: leave vsync_active reporting
+   // what creation time actually granted. The stored setting still applies
+   // on the next startup.
+   vsync_active = is_vsync_granted();
+   return 0;
+}
+//-------- End of function Vga::set_vsync ----------//
 
 
 //-------- Begin of function Vga::deinit ----------//

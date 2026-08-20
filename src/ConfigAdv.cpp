@@ -257,14 +257,15 @@ const char* ConfigAdv::vga_scale_quality_name(char mode)
 //--------- End of function ConfigAdv::vga_scale_quality_name -------------//
 
 
-//--------- Begin of function ConfigAdv::persist_vga_scale_quality -------------//
+//--------- Begin of function ConfigAdv::persist_setting -------------//
 //
-// Rewrites just the "vga_scale_quality = ..." line of config.txt (adding it
-// if missing), leaving every other line -- including hand-written comments
-// on unrelated settings -- untouched. This is the only ConfigAdv field the
-// game itself writes back; every other field is load()-only, hand-edited.
+// Rewrites just the "<key> = ..." line of config.txt (adding it if missing),
+// leaving every other line -- including hand-written comments on unrelated
+// settings -- untouched. Only the handful of fields the options menu can
+// change are written back this way; every other field is load()-only,
+// hand-edited.
 //
-int ConfigAdv::persist_vga_scale_quality()
+int ConfigAdv::persist_setting(const char *key, const char *value)
 {
 	char filename[] = "config.txt";
 	FilePath full_path(sys.dir_config);
@@ -294,8 +295,7 @@ int ConfigAdv::persist_vga_scale_quality()
 		configFile.file_close();
 	}
 
-	std::string new_line = std::string("vga_scale_quality = ") + vga_scale_quality_name(vga_scale_quality);
-	const char *key = "vga_scale_quality";
+	std::string new_line = std::string(key) + " = " + value;
 	size_t key_len = strlen(key);
 
 	std::string result;
@@ -343,7 +343,25 @@ int ConfigAdv::persist_vga_scale_quality()
 	outFile.file_close();
 	return ok;
 }
+//--------- End of function ConfigAdv::persist_setting -------------//
+
+
+//--------- Begin of function ConfigAdv::persist_vga_scale_quality -------------//
+//
+int ConfigAdv::persist_vga_scale_quality()
+{
+	return persist_setting("vga_scale_quality", vga_scale_quality_name(vga_scale_quality));
+}
 //--------- End of function ConfigAdv::persist_vga_scale_quality -------------//
+
+
+//--------- Begin of function ConfigAdv::persist_vga_vsync -------------//
+//
+int ConfigAdv::persist_vga_vsync()
+{
+	return persist_setting("vga_vsync", vga_vsync ? "true" : "false");
+}
+//--------- End of function ConfigAdv::persist_vga_vsync -------------//
 
 
 //--------- Begin of function ConfigAdv::reset ---------//
@@ -396,6 +414,14 @@ void ConfigAdv::reset()
 	vga_keep_aspect_ratio = 1;
 	vga_pause_on_focus_loss = 0;
 	vga_scale_quality = VGA_SCALE_LINEAR;   // matches today's unconditional bilinear default
+	// Off by default, deliberately. Vga::flip() still gates presentation
+	// behind its own hardcoded ~17ms timer, which caps presentation below
+	// every common refresh rate, so vsync has almost nothing to block on
+	// and changes little today (measured at 75Hz: 277 presents in 5s both
+	// with and without it, mean interval 17.95ms vs 18.00ms). Revisit this
+	// default once Phase 1e removes that gate and real frame pacing makes
+	// vsync meaningful -- and only after play-testing confirms the flip.
+	vga_vsync = 0;
 
 	vga_window_width = 0;
 	vga_window_height = 0;
@@ -641,6 +667,11 @@ int ConfigAdv::set(char *name, char *value)
 		else if( !strcmpi(value, "best") )
 			vga_scale_quality = VGA_SCALE_BEST;
 		else
+			return 0;
+	}
+	else if( !strcmp(name, "vga_vsync") )
+	{
+		if( !read_bool(value, &vga_vsync) )
 			return 0;
 	}
 	else if( !strcmp(name, "vga_window_height") )
