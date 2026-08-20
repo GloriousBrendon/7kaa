@@ -182,6 +182,19 @@ int ConfigAdv::load(char *filename)
 		line++;
 
 		fileTxt.match_chars(" \t");
+
+		// Skip whole-line comments. Without this a '#' line has no '=' and
+		// takes the err_out path below, failing the entire load -- and
+		// init() responds to a failed load by reset()ing every advanced
+		// setting back to its default, so one comment silently discarded
+		// the whole file. Trailing comments after a value are still not
+		// supported; the value would swallow them.
+		if( *fileTxt.data_ptr == '#' )
+		{
+			fileTxt.next_line();
+			continue;
+		}
+
 		name = fileTxt.data_ptr;
 		if( !fileTxt.match_chars_ex("= \t\r\n\x1a") )
 		{
