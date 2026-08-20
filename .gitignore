@@ -99,3 +99,8 @@ doc/main.ind
 tools/bmpicn
 tools/genfont
 tools/icnpack
+
+# Claude Code local settings (machine-specific permission allowlist, not
+# meant to be shared) -- .claude/settings.json (the shared hooks config) is
+# still tracked.
+.claude/settings.local.json
