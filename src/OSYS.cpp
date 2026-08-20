@@ -783,6 +783,21 @@ void Sys::main_loop(int isLoadedGame)
 	uint32_t firstUnreadyTime = 0;
 	// ##### patch end Gilbert 17/11 #######//
 
+   // ---- Phase 0 regression harness: run a fixed number of in-game days ---- //
+   // then exit, printing a CRC (reusing crc_store, the same aggregate check
+   // used for multiplayer desync detection) and wall-clock elapsed time.
+   // See scripts/phase0_harness.sh.
+   int harnessStartDate = 0;
+   uint32_t harnessWallStartTime = 0;
+   uint32_t harnessBusyMs = 0;      // cumulative time inside process(), reported only
+   uint32_t harnessLoopIters = 0;   // total main_loop iterations, reported only
+   uint32_t harnessFrameIters = 0;  // frames actually processed, reported only
+   if( cmd_line.harness_days > 0 )
+   {
+      harnessStartDate = info.game_date;
+      harnessWallStartTime = misc.get_time();
+   }
+
    while( 1 )
    {
          // #### begin Gilbert 31/10 ######//
@@ -790,6 +805,9 @@ void Sys::main_loop(int isLoadedGame)
          // #### end Gilbert 31/10 ######//
          if( sys.signal_exit_flag )
             break;
+
+         if( cmd_line.harness_days > 0 )
+            harnessLoopIters++;
 
          vga_front.lock_buf();
 
@@ -842,7 +860,13 @@ void Sys::main_loop(int isLoadedGame)
                }
 #endif
 
+               uint32_t harnessProcStart = misc.get_time();
                process(); // also calls 'disp_frame()'
+               if( cmd_line.harness_days > 0 )
+               {
+                  harnessBusyMs += misc.get_time() - harnessProcStart;
+                  harnessFrameIters++;
+               }
 
                if(remote.is_enable() )
                   misc.lock_seed();    // such that random seed is unchanged outside sys::process()
@@ -858,6 +882,21 @@ void Sys::main_loop(int isLoadedGame)
                      crc_store.send_frame();
                }
                // ###### patch end Gilbert 20/1 ######//
+
+               // ---- Phase 0 regression harness exit check ---- //
+               if( cmd_line.harness_days > 0 &&
+                   info.game_date - harnessStartDate >= cmd_line.harness_days )
+               {
+                  crc_store.record_all();
+                  printf("HARNESS_DAYS=%d\n", info.game_date - harnessStartDate);
+                  printf("HARNESS_CRC=%u\n", (unsigned)crc_store.frame_check_num);
+                  printf("HARNESS_WALLTIME_MS=%u\n", (unsigned)(misc.get_time() - harnessWallStartTime));
+                  printf("HARNESS_BUSY_MS=%u\n", (unsigned)harnessBusyMs);
+                  printf("HARNESS_FRAME_ITERS=%u\n", (unsigned)harnessFrameIters);
+                  printf("HARNESS_LOOP_ITERS=%u\n", (unsigned)harnessLoopIters);
+                  fflush(stdout);
+                  signal_exit_flag = 1;
+               }
 
             }
          }

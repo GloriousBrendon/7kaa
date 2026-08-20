@@ -40,6 +40,7 @@ struct CmdLine
 	int		rnd;
 	StartupMode	startup_mode;
 	char		*join_host;
+	int		harness_days;	// Phase 0 regression harness: exit after N in-game days (0 = disabled)
 
 	CmdLine();
 	~CmdLine();

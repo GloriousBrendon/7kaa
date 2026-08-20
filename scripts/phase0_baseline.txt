@@ -1,0 +1,10 @@
+# Phase 0 harness baseline — regenerate only deliberately, see script header.
+# Captured: 2026-08-20T21:12:58Z at commit 14e6fdfb
+HARNESS_DAYS=50
+FAST_CRC=37
+FAST_WALLTIME_MS=78
+FAST_TOLERANCE_PCT=25
+FLOOR_MARGIN_PCT=2
+# informational only, not asserted on comparison runs:
+# NORMAL_CRC=37 (should equal FAST_CRC)
+# NORMAL_WALLTIME_MS=45571

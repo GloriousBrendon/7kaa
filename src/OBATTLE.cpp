@@ -691,6 +691,12 @@ void Battle::run_test()
 
 	info.init_random_seed(153542);
 
+	// honor -speed (unlike Battle::run(), this entry point never wired it
+	// through); used by scripts/phase0_harness.sh to run frame_speed=99
+	// (should_next_frame() bypassed) for a CPU-bound regression signal,
+	// separate from the default-speed pacing-floor check.
+	sys.set_speed(cmd_line.game_speed >= 0 ? cmd_line.game_speed : 12, COMMAND_AUTO);
+
 	world.generate_map();
 
 	//--------- refresh world ---------//

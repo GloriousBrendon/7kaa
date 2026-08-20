@@ -35,6 +35,7 @@ CmdLine::CmdLine()
 	game_speed = -1;
 	startup_mode = STARTUP_NORMAL;
 	join_host = NULL;
+	harness_days = 0;
 }
 
 CmdLine::~CmdLine()
@@ -73,6 +74,10 @@ static int set_startup_mode(StartupMode mode)
 //   Set the name you wish to be known as.
 // -speed <game speed>
 //   Set the initial game speed (not for multiplayer)
+// -headless-test-days <n>
+//   Run the built-in test scenario (Battle::run_test) and exit after n
+//   in-game days, printing a HARNESS_CRC/HARNESS_WALLTIME_MS summary line.
+//   Used by scripts/phase0_harness.sh for the deterministic regression check.
 int CmdLine::init(int argc, char **argv)
 {
 	const char *lobbyJoinOption = "-join";
@@ -84,6 +89,7 @@ int CmdLine::init(int argc, char **argv)
 	const char *rndOption = "-rnd";
 	const char *speedOption = "-speed";
 	const char *windowOption = "-win";
+	const char *harnessDaysOption = "-headless-test-days";
 	for( int i = 1; i < argc; i++ )
 	{
 		if( !strcmp(argv[i], lobbyJoinOption) )
@@ -135,6 +141,14 @@ int CmdLine::init(int argc, char **argv)
 		else if( !strcmp(argv[i], windowOption) )
 		{
 			config_adv.vga_full_screen = 0;
+		}
+		else if( !strcmp(argv[i], harnessDaysOption) )
+		{
+			if( !have_arg(i, argc, harnessDaysOption) )
+				return 0;
+			if( !set_startup_mode(STARTUP_TEST) )
+				return 0;
+			harness_days = atoi(argv[++i]);
 		}
 	}
 	return 1;
