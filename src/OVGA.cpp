@@ -112,7 +112,7 @@ int Vga::init()
    if( !renderer )
       return 0;
 
-   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, ConfigAdv::vga_scale_quality_name(config_adv.vga_scale_quality));
    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
    if( config_adv.vga_keep_aspect_ratio )
       SDL_RenderSetLogicalSize(renderer, VGA_WIDTH, VGA_HEIGHT);
@@ -183,6 +183,45 @@ int Vga::init()
    return 1;
 }
 //-------- End of function Vga::init ----------//
+
+
+//-------- Begin of function Vga::set_scale_quality ----------//
+//
+// Change the render scale-quality filter (nearest/linear/best) live, with
+// no app restart. SDL_HINT_RENDER_SCALE_QUALITY is read only at texture
+// creation time, so this destroys and recreates the streaming texture
+// (not the target surface, whose format/size don't depend on scale
+// quality) with the new hint applied.
+//
+void Vga::set_scale_quality(char mode)
+{
+   if( !renderer || !texture )
+      return;
+
+   Uint32 window_pixel_format = SDL_GetWindowPixelFormat(window);
+   if( window_pixel_format == SDL_PIXELFORMAT_UNKNOWN )
+      return;
+
+   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, ConfigAdv::vga_scale_quality_name(mode));
+
+   SDL_Texture *newTexture = SDL_CreateTexture(renderer,
+                               window_pixel_format,
+                               SDL_TEXTUREACCESS_STREAMING,
+                               VGA_WIDTH,
+                               VGA_HEIGHT);
+   if( !newTexture )
+   {
+      ERR("Could not recreate texture with new scale quality: %s\n", SDL_GetError());
+      return;
+   }
+
+   SDL_DestroyTexture(texture);
+   texture = newTexture;
+   config_adv.vga_scale_quality = mode;
+
+   // next flip() re-uploads target->pixels into the new texture unconditionally
+}
+//-------- End of function Vga::set_scale_quality ----------//
 
 
 //-------- Begin of function Vga::deinit ----------//

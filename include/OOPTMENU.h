@@ -50,7 +50,11 @@ public:
 	ButtonCustomGroup report_group;
 	ButtonCustomGroup show_icon_group;
 	ButtonCustomGroup show_path_group;
+	ButtonCustomGroup scale_quality_group;
 	Button3D start_button, cancel_button;
+
+	char	old_scale_quality;
+	char	scale_quality_changed;
 
 public:
 	OptionMenu();

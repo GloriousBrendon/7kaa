@@ -31,6 +31,7 @@
 #include <posix_string_compat.h>
 #include <version.h>
 #include <errno.h>
+#include <string>
 #include "gettext.h"
 
 #define CHECK_BOUND(n,x,y) n<x || n>y
@@ -223,6 +224,115 @@ err_out:
 //--------- End of function ConfigAdv::load -------------//
 
 
+//--------- Begin of function ConfigAdv::vga_scale_quality_name -------------//
+//
+// Also the exact string SDL_HINT_RENDER_SCALE_QUALITY expects, so this is
+// used both for config.txt values and for setting the SDL hint.
+//
+const char* ConfigAdv::vga_scale_quality_name(char mode)
+{
+	switch( mode )
+	{
+	case VGA_SCALE_NEAREST:
+		return "nearest";
+	case VGA_SCALE_BEST:
+		return "best";
+	default:
+		return "linear";
+	}
+}
+//--------- End of function ConfigAdv::vga_scale_quality_name -------------//
+
+
+//--------- Begin of function ConfigAdv::persist_vga_scale_quality -------------//
+//
+// Rewrites just the "vga_scale_quality = ..." line of config.txt (adding it
+// if missing), leaving every other line -- including hand-written comments
+// on unrelated settings -- untouched. This is the only ConfigAdv field the
+// game itself writes back; every other field is load()-only, hand-edited.
+//
+int ConfigAdv::persist_vga_scale_quality()
+{
+	char filename[] = "config.txt";
+	FilePath full_path(sys.dir_config);
+	full_path += filename;
+	if( full_path.error_flag )
+		return 0;
+	if( !misc.is_file_exist(full_path) )
+	{
+		// mirror load()'s fallback so we write back to wherever the file
+		// actually came from, rather than creating a second copy
+		full_path = filename;
+		if( full_path.error_flag )
+			return 0;
+	}
+
+	std::string content;
+	File configFile;
+	if( configFile.file_open(full_path, 0) )
+	{
+		long size = configFile.file_size();
+		if( size > 0 )
+		{
+			content.resize(size);
+			if( !configFile.file_read(&content[0], size) )
+				content.clear();
+		}
+		configFile.file_close();
+	}
+
+	std::string new_line = std::string("vga_scale_quality = ") + vga_scale_quality_name(vga_scale_quality);
+	const char *key = "vga_scale_quality";
+	size_t key_len = strlen(key);
+
+	std::string result;
+	result.reserve(content.size() + new_line.size() + 1);
+
+	bool replaced = false;
+	size_t pos = 0;
+	while( pos < content.size() )
+	{
+		size_t eol = content.find('\n', pos);
+		size_t line_end = (eol == std::string::npos) ? content.size() : eol;
+
+		size_t key_pos = content.find_first_not_of(" \t", pos);
+		if( !replaced && key_pos != std::string::npos && key_pos < line_end &&
+			 content.compare(key_pos, key_len, key) == 0 &&
+			 ( key_pos+key_len == line_end || content[key_pos+key_len] == ' ' ||
+			   content[key_pos+key_len] == '\t' || content[key_pos+key_len] == '=' ) )
+		{
+			result += new_line;
+			replaced = true;
+		}
+		else
+		{
+			result.append(content, pos, line_end-pos);
+		}
+
+		if( eol != std::string::npos )
+			result += '\n';
+
+		pos = (eol == std::string::npos) ? content.size() : eol+1;
+	}
+
+	if( !replaced )
+	{
+		if( !result.empty() && result[result.size()-1] != '\n' )
+			result += '\n';
+		result += new_line;
+		result += '\n';
+	}
+
+	File outFile;
+	if( !outFile.file_create(full_path, 0) )
+		return 0;
+	int ok = result.empty() ? 1 : outFile.file_write((void*)result.data(), (unsigned)result.size());
+	outFile.file_close();
+	return ok;
+}
+//--------- End of function ConfigAdv::persist_vga_scale_quality -------------//
+
+
 //--------- Begin of function ConfigAdv::reset ---------//
 //
 void ConfigAdv::reset()
@@ -272,6 +382,7 @@ void ConfigAdv::reset()
 	vga_full_screen_desktop = 1;
 	vga_keep_aspect_ratio = 1;
 	vga_pause_on_focus_loss = 0;
+	vga_scale_quality = VGA_SCALE_LINEAR;   // matches today's unconditional bilinear default
 
 	vga_window_width = 0;
 	vga_window_height = 0;
@@ -506,6 +617,17 @@ int ConfigAdv::set(char *name, char *value)
 	else if( !strcmp(name, "vga_pause_on_focus_loss") )
 	{
 		if( !read_bool(value, &vga_pause_on_focus_loss) )
+			return 0;
+	}
+	else if( !strcmp(name, "vga_scale_quality") )
+	{
+		if( !strcmpi(value, "nearest") )
+			vga_scale_quality = VGA_SCALE_NEAREST;
+		else if( !strcmpi(value, "linear") )
+			vga_scale_quality = VGA_SCALE_LINEAR;
+		else if( !strcmpi(value, "best") )
+			vga_scale_quality = VGA_SCALE_BEST;
+		else
 			return 0;
 	}
 	else if( !strcmp(name, "vga_window_height") )

@@ -123,6 +123,7 @@ public:
 	void   set_full_screen_mode(int mode);
 	void   set_mouse_mode(MouseInputMode mode);
 	void   set_window_grab(WinGrab mode);
+	void   set_scale_quality(char mode);
 	void   flip();
 	void   save_status_report();
 

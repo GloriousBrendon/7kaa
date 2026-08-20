@@ -100,12 +100,17 @@ public:
 	char			vga_full_screen_desktop;
 	char			vga_keep_aspect_ratio;
 	char			vga_pause_on_focus_loss;
+	char			vga_scale_quality;   // see enum below
 
 	int			vga_window_width;
 	int			vga_window_height;
 
 	// wall settings
 	char			wall_building_allowed;
+
+public:
+	// SDL_HINT_RENDER_SCALE_QUALITY modes for vga_scale_quality
+	enum { VGA_SCALE_NEAREST=0, VGA_SCALE_LINEAR=1, VGA_SCALE_BEST=2 };
 
 public:
 	ConfigAdv();
@@ -115,6 +120,13 @@ public:
 	int			load(char *filename);
 	void			reset();
 	int			set(char *name, char *value);
+
+	// name used both for config.txt values and the SDL scale-quality hint
+	static const char*	vga_scale_quality_name(char mode);
+
+	// rewrite just the vga_scale_quality line of config.txt, preserving
+	// everything else in the file, so an in-game change survives restart
+	int			persist_vga_scale_quality();
 
 private:
 	void			update_check_sum(char *name, char *value);

@@ -69,6 +69,12 @@ m4/xsize.m4
 data/RESOURCE/STD/
 data/RESOURCE/TUT_INTR/
 data/RESOURCE/TUT_TEXT/
+
+# ConfigAdv::load()/persist_vga_scale_quality() fall back to a plain
+# "config.txt" relative path when sys.dir_config has none yet. The game
+# chdirs into SKDATA at startup, so running `SKDATA=data src/7kaa` from a
+# checkout writes that fallback file here.
+data/config.txt
 po/7kaa.res.pot
 po/7kaa.src.pot
 po/Makefile.in.in

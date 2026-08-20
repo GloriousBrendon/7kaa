@@ -36,7 +36,9 @@
 #include <OAUDIO.h>
 #include <OMUSIC.h>
 #include <OSYS.h>
+#include <ConfigAdv.h>
 #include <OOPTMENU.h>
+#include "gettext.h"
 
 
 enum { BASIC_OPTION_X_SPACE = 78,
@@ -77,13 +79,14 @@ static void disp_slide_bar(SlideBar *slideBar, int);
 #define IGOPTION_SHOW_ICON       0x00000100
 #define IGOPTION_DRAW_PATH       0x00000200
 #define IGOPTION_MAP_ID          0x00000400
+#define IGOPTION_SCALE_QUALITY   0x00000800
 #define IGOPTION_PAGE            0x40000000
 #define IGOPTION_ALL             0x7FFFFFFF
 
 
 
 OptionMenu::OptionMenu() : help_group(3), news_group(2), report_group(2) ,
-	show_icon_group(2), show_path_group(4)
+	show_icon_group(2), show_path_group(4), scale_quality_group(3)
 
 {
 	active_flag = 0;
@@ -180,6 +183,24 @@ void OptionMenu::enter(char untilExitFlag)
 			disp_virtual_button, ButtonCustomPara(&show_path_group, i), 0, 0);
 	}
 
+	// --------- initialize scale quality (rendering filter) button group ---------- //
+
+	{
+		const char* scale_quality_label[3] = { _("Nearest"), _("Linear"), _("Best") };
+		const int bx1 = 572, by1 = 380, bw = 74, bh = 21, gap = 2;
+
+		for( i = 0; i < 3; ++i )
+		{
+			scale_quality_group[i].create( bx1+i*(bw+gap), by1,
+				bx1+i*(bw+gap)+bw-1, by1+bh-1,
+				ButtonCustom::disp_text_button_func,
+				ButtonCustomPara((void*)scale_quality_label[i], i), 0, 0 );
+		}
+	}
+
+	old_scale_quality = config_adv.vga_scale_quality;
+	scale_quality_changed = 0;
+
 	// --------- other buttons --------//
 	start_button.create(200, 520, "RETURN-U", "RETURN-D", 1, 0);
 	cancel_button.create(416, 520, "CANCEL-U", "CANCEL-D", 1, 0);
@@ -221,6 +242,11 @@ void OptionMenu::disp(int needRepaint)
 		if( refresh_flag & IGOPTION_PAGE )
 		{
 			image_interface.put_to_buf( &vga_back, "OPTIONS");
+
+			vga.use_back();
+			font_san.put(572, 358, _("Scale Filter"));
+			vga.use_front();
+
 			vga_util.blt_buf(0,0,VGA_WIDTH-1,VGA_HEIGHT-1,0);
 
 			start_button.paint();
@@ -273,6 +299,10 @@ void OptionMenu::disp(int needRepaint)
 			//int x2;
 			//x2 = font_san.put(521, 64, "Map ID : ", 1);
 			//x2 = font_san.put(x2, 64, info.random_seed, 1);
+		}
+		if( refresh_flag & IGOPTION_SCALE_QUALITY )
+		{
+			scale_quality_group.paint(config_adv.vga_scale_quality);
 		}
 
 		refresh_flag = 0;
@@ -376,6 +406,11 @@ int OptionMenu::detect()
 		//refresh_flag |= IGOPTION_DRAW_PATH;
 		update_flag |= IGOPTION_DRAW_PATH;
 	}
+	else if( scale_quality_group.detect() >= 0)
+	{
+		vga.set_scale_quality( (char) scale_quality_group[scale_quality_group()].custom_para.value );
+		scale_quality_changed = 1;
+	}
 	else if( start_button.detect(KEY_RETURN) )
 	{
 		if( &config != &tempConfig)
@@ -393,10 +428,15 @@ int OptionMenu::detect()
 			fileConfig.save("CONFIG.DAT");
 		}
 
+		if( scale_quality_changed )
+			config_adv.persist_vga_scale_quality();
 	}
 	else if( cancel_button.detect(KEY_ESC) )
 	{
 		config = old_config;
+
+		if( scale_quality_changed )
+			vga.set_scale_quality(old_scale_quality);
 
 		exit(0);
 	}
