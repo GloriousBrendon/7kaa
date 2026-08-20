@@ -53,6 +53,15 @@ unsigned char AnimLine::series_color_code[ANIMCOLOR_SERIES][ANIMLINE_PERIOD] =
 	{ 0xA0, 0xC3, 0xA0, 0xC3, 0xA0, 0xC3, 0xA0, 0xC3 },
 };
 
+// Real-time interval, in ms, between marching-ants phase advances
+// (AnimLine::inc_phase()). Currently set to match Vga::flip()'s ~17ms
+// presentation gate (src/OVGA.cpp) so decoupling the animation from raw
+// frame rate is a visual no-op today. Once Phase 1e removes that gate,
+// this stops being tied to presentation at all and becomes purely an
+// animation-speed choice — revisit the value then, on its own merits,
+// not by re-deriving it from whatever presentation cadence 1e lands on.
+static const unsigned long ANIM_PHASE_INTERVAL_MS = 17;
+
 // ----------- Begin of function AnimLine::init ----------//
 //
 // <short> x1, y1, x2, y2    defines corners of the display area
@@ -66,19 +75,29 @@ void AnimLine::init(short x1, short y1, short x2, short y2)
 	bound_y2 = y2;
 	phase = 0;
 	color_phase = 0;
+	next_phase_time = 0;
 }
 // ----------- End of function AnimLine::init ----------//
 
 
 // ----------- Begin of function AnimLine::inc_phase ----------//
 //
-// called after each display cycle
+// called after each display cycle; advances the animation by wall-clock
+// time rather than once per call, so its speed stays constant regardless
+// of how often the display path runs (today gated to ~58.8fps by
+// Vga::flip()'s 17ms presentation gate, see docs/remaster/FINDINGS.md)
 //
 void AnimLine::inc_phase()
 {
+	unsigned long curTime = misc.get_time();
+	if( next_phase_time && curTime < next_phase_time )
+		return;
+
 	phase = (phase == 0 ? ANIMLINE_PERIOD : phase) - 1;
 	if( ++color_phase >= ANIMCOLOR_PERIOD*ANIMCOLOR_INNER_PERIOD )
 		color_phase = 0;
+
+	next_phase_time = curTime + ANIM_PHASE_INTERVAL_MS;
 }
 // ----------- End of function AnimLine::inc_phase ----------//
 

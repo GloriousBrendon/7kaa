@@ -45,6 +45,7 @@ public:
 	short		bound_y2;
 	short		phase;
 	short		color_phase;
+	unsigned long	next_phase_time;	// wall-clock time inc_phase() should next advance the animation
 
 	static	unsigned char init_color_code[ANIMCOLOR_PERIOD][ANIMLINE_PERIOD];
 	static	unsigned char series_color_code[ANIMCOLOR_SERIES][ANIMLINE_PERIOD];
