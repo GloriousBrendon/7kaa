@@ -992,7 +992,11 @@ void Vga::save_status_report()
          fprintf(file, "Scale: xscale=%f,yscale=%f\n", xscale, yscale);
          fprintf(file, "Logical size: w=%d, h=%d\n", w, h);
          fprintf(file, "Capabilities: %s\n", info.flags & SDL_RENDERER_ACCELERATED ? "hardware accelerated" : "software fallback");
-         fprintf(file, "V-sync: %s\n", info.flags & SDL_RENDERER_PRESENTVSYNC ? "on" : "off");
+         // vsync_active, not info.flags: SDL_GetRendererInfo() reports the
+         // flags the renderer was CREATED with and does not refresh
+         // PRESENTVSYNC after SDL_RenderSetVSync(), so the flag goes stale
+         // as soon as the Options toggle changes vsync at runtime.
+         fprintf(file, "V-sync: %s\n", vsync_active ? "on" : "off");
          fprintf(file, "Rendering to texture supported: %s\n", info.flags & SDL_RENDERER_TARGETTEXTURE ? "yes" : "no");
          if( info.max_texture_width || info.max_texture_height )
             fprintf(file, "Maximum texture size: %dx%d\n", info.max_texture_width, info.max_texture_height);
