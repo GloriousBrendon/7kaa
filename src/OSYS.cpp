@@ -1630,6 +1630,19 @@ uint32_t Sys::idle_nap_ms()
    if( !next_frame_time )         // first frame of the game -- don't hold it up
       return 0;
 
+   //----- never nap on top of unconsumed input -----//
+   //
+   // Sys::detect() pops exactly ONE event per loop iteration (see
+   // Mouse::get_event()), so the loop's iteration rate is also the rate
+   // input drains at. Napping through a backlog would push events past the
+   // frame boundary they were meant to land on and cost them a whole
+   // 1000/frame_speed ms -- 83ms at the default -- which reads as an
+   // intermittent, "sometimes instant, sometimes not" input delay. Spin
+   // until the queue is empty; a backlog is by definition not idle.
+
+   if( mouse.is_event_queued() )
+      return 0;
+
    //---- nap only if the next frame is comfortably far away ----//
    //
    // Signed difference so the uint32_t wrap of misc.get_time() reads as a
