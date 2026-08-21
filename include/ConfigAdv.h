@@ -98,6 +98,9 @@ public:
 	char			vga_allow_highdpi;
 	char			vga_full_screen;
 	char			vga_full_screen_desktop;
+	// nap briefly between simulation frames, and in the menu loops, instead
+	// of spinning a core; pacing knob, hence the vga_ group
+	char			vga_idle_sleep;
 	char			vga_keep_aspect_ratio;
 	char			vga_pause_on_focus_loss;
 	char			vga_scale_quality;   // see enum below

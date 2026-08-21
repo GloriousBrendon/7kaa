@@ -85,6 +85,7 @@ private:
 	int bound_x1, bound_y1, bound_x2, bound_y2;
 	int boundary_set;
 	char vsync_active;   // vsync the driver actually granted, not what was asked for
+	int present_interval_ms;   // flip() throttle, derived from the display's refresh rate
 
 public:
 	ColorTable*    vga_color_table;
@@ -128,6 +129,7 @@ public:
 	int    set_vsync(char enable);
 	char   is_vsync_granted();
 	char   is_vsync_active()  { return vsync_active; }
+	void   update_present_interval();
 	void   flip();
 	void   save_status_report();
 

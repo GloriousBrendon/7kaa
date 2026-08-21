@@ -47,7 +47,7 @@ Build/economy pacing, combat feel, diplomacy AI personality variety, and the gen
 
 ## Rendering pipeline, in one paragraph
 
-Still an 8-bit paletted software renderer: fixed 800×600 internal resolution (`include/OVGA.h :: VGA_WIDTH`/`VGA_HEIGHT`), CPU-side blitting, one texture upload to SDL2 per frame (`src/OVGA.cpp :: Vga::flip()`). No vsync requested today, a busy-spin main loop, and a hardcoded ~17ms presentation gate unrelated to real display refresh — these are the primary suspects behind fan-reported nausea/headaches. Full detail: `docs/remaster/FINDINGS.md`.
+Still an 8-bit paletted software renderer: fixed 800×600 internal resolution (`include/OVGA.h :: VGA_WIDTH`/`VGA_HEIGHT`), CPU-side blitting, one texture upload to SDL2 per frame (`src/OVGA.cpp :: Vga::flip()`). Optional vsync (`vga_vsync`, off by default), an idle-napping main loop, and a presentation interval derived from the display's real refresh rate (`src/OVGA.cpp :: Vga::update_present_interval()`) — all three were the busy-spin/hardcoded-~17ms-gate suspects behind fan-reported nausea/headaches, addressed in Phases 1d and 1e. The remaining suspect is the jump-scroll camera (Phase 1f). Full detail: `docs/remaster/FINDINGS.md`.
 
 ## Build & run
 

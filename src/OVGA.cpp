@@ -39,6 +39,20 @@ static void init_dpi();
 static int init_window_flags();
 static void init_window_size();
 
+//------ Frame presentation pacing ---------//
+
+// Used only when the display's real refresh rate can't be read. It is a
+// fallback for missing information, not a target: any value here is wrong
+// on some display, which is exactly why the old hardcoded ~17ms gate was
+// wrong on all of them.
+#define PRESENT_FALLBACK_HZ         60
+
+// How often flip() re-derives the interval, so moving the window to a
+// second monitor or changing the desktop mode is picked up without wiring
+// up display-hotplug events (SDL_WINDOWEVENT_DISPLAY_CHANGED needs 2.0.18;
+// this build supports back to 2.0.4).
+#define PRESENT_INTERVAL_RECHECK_MS 1000
+
 //------ Define static class member vars ---------//
 
 char    Vga::use_back_buf = 0;
@@ -58,6 +72,7 @@ Vga::Vga()
    renderer = NULL;
    window = NULL;
    vsync_active = 0;
+   present_interval_ms = 1000 / PRESENT_FALLBACK_HZ;
 }
 //-------- End of function Vga::Vga ----------//
 
@@ -121,6 +136,7 @@ int Vga::init()
       return 0;
 
    vsync_active = is_vsync_granted();
+   update_present_interval();
 
    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, ConfigAdv::vga_scale_quality_name(config_adv.vga_scale_quality));
    SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_MODE_WARP, "1");
@@ -896,24 +912,82 @@ void Vga::set_window_grab(WinGrab mode)
 //-------- End of function Vga::set_window_grab ----------//
 
 
+//-------- Beginning of function Vga::update_present_interval ----------//
+//
+// Derive flip()'s presentation throttle from the display the window is
+// actually on. Replaces a hardcoded ~17ms (~58.8fps) gate that matched no
+// real display's refresh interval.
+//
+// Applied whether or not vsync is on, deliberately. The obvious alternative
+// -- drop the throttle entirely and let SDL_RenderPresent() block on vblank
+// -- assumes a granted PRESENTVSYNC actually blocks, and that does not hold:
+// measured on the reference machine (SDL 2.32, Wayland, 165Hz), a renderer
+// reporting vsync ON ran 230972 presents in 5s (~46000fps) through a
+// *visible* window, and 13.8M through a hidden one. A vsync that silently
+// declines to block would turn an unthrottled flip() into a spin.
+//
+// Because the interval is truncated below the true one it can never throttle
+// under the display's refresh rate, so where vsync does block it stays in
+// charge and this is an inert backstop.
+//
+void Vga::update_present_interval()
+{
+   SDL_DisplayMode mode;
+   int display_index;
+
+   display_index = window ? SDL_GetWindowDisplayIndex(window) : -1;
+
+   if( display_index >= 0 &&
+       SDL_GetCurrentDisplayMode(display_index, &mode) == 0 &&
+       mode.refresh_rate > 0 )
+   {
+      // Integer division truncates, so the interval is never longer than
+      // the real one -- presentation can end up marginally ahead of the
+      // display, never throttled below it (e.g. 165Hz -> 6ms -> 166fps,
+      // 75Hz -> 13ms, 60Hz -> 16ms).
+      present_interval_ms = 1000 / mode.refresh_rate;
+   }
+   else
+   {
+      present_interval_ms = 1000 / PRESENT_FALLBACK_HZ;
+   }
+}
+//-------- End of function Vga::update_present_interval ----------//
+
+
 //-------- Beginning of function Vga::flip ----------//
 void Vga::flip()
 {
    static Uint32 ticks = 0;
+   static Uint32 recheck_ticks = 0;
    Uint32 cur_ticks;
 
    if( !is_inited() )
       return;
 
    cur_ticks = SDL_GetTicks();
-   if (cur_ticks > ticks + 17 || cur_ticks < ticks) {
-      ticks = cur_ticks;
-      SDL_BlitSurface(vga_front.surface, NULL, target, NULL);
-      SDL_UpdateTexture(texture, NULL, target->pixels, target->pitch);
-      SDL_RenderClear(renderer);
-      SDL_RenderCopy(renderer, texture, NULL, NULL);
-      SDL_RenderPresent(renderer);
+
+   // Unsigned subtraction throughout, so the ~49-day SDL_GetTicks() wrap
+   // reads as one large delta (present now) instead of needing the special
+   // case the old gate carried.
+
+   if( cur_ticks - recheck_ticks >= PRESENT_INTERVAL_RECHECK_MS )
+   {
+      recheck_ticks = cur_ticks;
+      update_present_interval();
    }
+
+   // 0 only for an implausibly fast display (>1000Hz), where there is
+   // nothing left to throttle.
+   if( present_interval_ms && cur_ticks - ticks < (Uint32)present_interval_ms )
+      return;
+
+   ticks = cur_ticks;
+   SDL_BlitSurface(vga_front.surface, NULL, target, NULL);
+   SDL_UpdateTexture(texture, NULL, target->pixels, target->pitch);
+   SDL_RenderClear(renderer);
+   SDL_RenderCopy(renderer, texture, NULL, NULL);
+   SDL_RenderPresent(renderer);
 }
 //-------- End of function Vga::flip ----------//
 
@@ -997,6 +1071,7 @@ void Vga::save_status_report()
          // PRESENTVSYNC after SDL_RenderSetVSync(), so the flag goes stale
          // as soon as the Options toggle changes vsync at runtime.
          fprintf(file, "V-sync: %s\n", vsync_active ? "on" : "off");
+         fprintf(file, "Presentation interval: %dms (display-derived)\n", present_interval_ms);
          fprintf(file, "Rendering to texture supported: %s\n", info.flags & SDL_RENDERER_TARGETTEXTURE ? "yes" : "no");
          if( info.max_texture_width || info.max_texture_height )
             fprintf(file, "Maximum texture size: %dx%d\n", info.max_texture_width, info.max_texture_height);

@@ -178,6 +178,7 @@ Sys::Sys()
    sys_flag = SYS_PREGAME;
 
    is_mp_game = 0;
+   in_main_loop = 0;
    toggle_full_screen_flag = 0;
    user_pause_flag = 0;
    disp_fps_flag = 0;
@@ -798,6 +799,8 @@ void Sys::main_loop(int isLoadedGame)
       harnessWallStartTime = misc.get_time();
    }
 
+   in_main_loop = 1;
+
    while( 1 )
    {
          // #### begin Gilbert 31/10 ######//
@@ -1021,7 +1024,22 @@ void Sys::main_loop(int isLoadedGame)
          }
 
          vga_front.unlock_buf();
+
+         //--- give the CPU back while waiting for the next frame ---//
+         //
+         // Only reached when rc==0, i.e. this iteration did not advance the
+         // simulation. Placed after unlock_buf() so the frame buffer is
+         // never held locked across a sleep.
+
+         if( !rc )
+         {
+            uint32_t napMs = idle_nap_ms();
+            if( napMs )
+               SDL_Delay(napMs);
+         }
    }
+
+   in_main_loop = 0;
 
    // #### begin Gilbert 23/10 #######//
    in_game_menu.active_flag = 0;
@@ -1209,6 +1227,12 @@ void Sys::show_error_dialog(const char *formatStr, ...)
 //----------- End of function Sys::show_error_dialog ----------//
 
 
+// How long the non-gameplay UI loops nap per poll. Nothing outside the game
+// is on a frame budget, so this only has to stay short enough that mouse and
+// keyboard polling still feels instant.
+
+#define UI_IDLE_NAP_MS 3
+
 //-------- Begin of function Sys::yield --------//
 //
 void Sys::yield()
@@ -1219,6 +1243,22 @@ void Sys::yield()
       return;
 
    isYielding=1;
+
+   //--- give the CPU back in the menu/dialog loops ---//
+   //
+   // The 70-odd `sys.yield(); vga.flip(); mouse.get_event();` loops outside
+   // the game -- main menu, game setup, multiplayer lobby, hall of fame --
+   // poll as fast as the CPU allows and pin a core at ~100% while sitting
+   // idle, exactly as main_loop() used to.
+   //
+   // Deliberately skipped while in_main_loop: yield() is also reached from
+   // inside the frame-paced loop (and from modal dialogs nested in it),
+   // where an unconditional nap would delay the frame that iteration was
+   // about to run. main_loop() does its own, budget-aware napping via
+   // idle_nap_ms() instead, so in-game timing is untouched by this.
+
+   if( !in_main_loop && config_adv.vga_idle_sleep )
+      SDL_Delay(UI_IDLE_NAP_MS);
 
    vga.handle_messages();
 
@@ -1548,6 +1588,64 @@ int Sys::should_next_frame()
    return 1;
 }
 //--------- End of function Sys::should_next_frame ---------//
+
+
+//-------- Begin of function Sys::idle_nap_ms --------//
+//
+// How long main_loop() may sleep right now, in milliseconds, or 0 for
+// "don't sleep". Called only when the loop has decided NOT to advance a
+// frame this iteration, so this can never delay the simulation: it only
+// replaces cycles the loop would otherwise have burned re-asking
+// should_next_frame() the same question millions of times per frame.
+//
+// The nap is deliberately far shorter than the wait it covers (a 2ms cap
+// against a 83ms frame budget at the default frame_speed=12). Input and
+// network polling happen once per loop iteration, so the cap is what bounds
+// added input latency, and a longer nap would trade CPU we don't need for
+// responsiveness we do.
+//
+uint32_t Sys::idle_nap_ms()
+{
+   //--- longest single nap, and how close to the next frame we stop napping ---//
+   //
+   // GUARD_MS is the tail of the wait that is still spun rather than slept
+   // through, so an SDL_Delay() that overshoots its request cannot be what
+   // makes a frame start late. Spinning 1ms out of every 83ms frame is a
+   // ~1% duty cycle -- cheap insurance against a coarse platform timer.
+
+   const uint32_t NAP_MS   = 2;
+   const int32_t  GUARD_MS = 1;
+
+   if( !config_adv.vga_idle_sleep )
+      return 0;
+
+   //----- special modes, mirroring should_next_frame() -----//
+
+   if( config.frame_speed==99 )   // fastest possible: never idle, nothing to nap through
+      return 0;
+
+   if( config.frame_speed==0 )    // frozen: nothing will advance until the player acts
+      return NAP_MS;
+
+   if( !next_frame_time )         // first frame of the game -- don't hold it up
+      return 0;
+
+   //---- nap only if the next frame is comfortably far away ----//
+   //
+   // Signed difference so the uint32_t wrap of misc.get_time() reads as a
+   // small negative remainder ("the frame is due") rather than a ~49-day
+   // wait. In multiplayer, should_next_frame() is bypassed for is_mp_sync()
+   // and next_frame_time stays stale, so this reads as due and no nap
+   // happens -- correct by default, just less of a CPU saving there.
+
+   int32_t remainMs = (int32_t)(next_frame_time - misc.get_time()) - GUARD_MS;
+
+   if( remainMs <= 0 )
+      return 0;
+
+   return remainMs < (int32_t)NAP_MS ? (uint32_t)remainMs : NAP_MS;
+}
+//--------- End of function Sys::idle_nap_ms ---------//
 
 
 //-------- Begin of function Sys::process_key --------//

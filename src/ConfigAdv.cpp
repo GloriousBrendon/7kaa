@@ -411,16 +411,25 @@ void ConfigAdv::reset()
 	vga_allow_highdpi = 0;
 	vga_full_screen = 1;
 	vga_full_screen_desktop = 1;
+	// On by default: both the main loop and the menu loops used to spin a
+	// core at ~100% with nothing to do (measured headless: 10.9M main-loop
+	// iterations to advance 550 frames; 99% of a core sitting at the main
+	// menu). The nap is bounded well below the shortest frame budget and
+	// never gates simulation advancement -- Sys::should_next_frame() remains
+	// the sole authority on that. Set false to restore the old busy-spin if
+	// a platform's sleep granularity turns out to be too coarse.
+	vga_idle_sleep = 1;
 	vga_keep_aspect_ratio = 1;
 	vga_pause_on_focus_loss = 0;
 	vga_scale_quality = VGA_SCALE_LINEAR;   // matches today's unconditional bilinear default
-	// Off by default, deliberately. Vga::flip() still gates presentation
-	// behind its own hardcoded ~17ms timer, which caps presentation below
-	// every common refresh rate, so vsync has almost nothing to block on
-	// and changes little today (measured at 75Hz: 277 presents in 5s both
-	// with and without it, mean interval 17.95ms vs 18.00ms). Revisit this
-	// default once Phase 1e removes that gate and real frame pacing makes
-	// vsync meaningful -- and only after play-testing confirms the flip.
+	// Still off by default after Phase 1e replaced flip()'s hardcoded ~17ms
+	// gate with a display-derived interval. The reason changed: presentation
+	// is no longer capped below the refresh rate, but a granted PRESENTVSYNC
+	// was measured NOT to block at all on the reference machine (SDL 2.32,
+	// Wayland, 165Hz -- see Vga::update_present_interval()), so turning it on
+	// buys nothing there and the display-derived interval does the pacing
+	// either way. Flip this default only after play-testing on hardware where
+	// vsync demonstrably blocks.
 	vga_vsync = 0;
 
 	vga_window_width = 0;
@@ -646,6 +655,11 @@ int ConfigAdv::set(char *name, char *value)
 	else if( !strcmp(name, "vga_full_screen_desktop") )
 	{
 		if( !read_bool(value, &vga_full_screen_desktop) )
+			return 0;
+	}
+	else if( !strcmp(name, "vga_idle_sleep") )
+	{
+		if( !read_bool(value, &vga_idle_sleep) )
 			return 0;
 	}
 	else if( !strcmp(name, "vga_keep_aspect_ratio") )

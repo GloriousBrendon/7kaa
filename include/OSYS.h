@@ -101,6 +101,7 @@ public:
 
 	int 		day_frame_count;
 	uint32_t	next_frame_time;		// next frame's time for maintaining a specific game speed
+	char		in_main_loop;			// inside main_loop()'s frame-paced loop; see yield()
 
 	//----- multiplayer vars ----//
 
@@ -221,6 +222,7 @@ private:
 	void 		disp_zoom();
 
 	int		should_next_frame();
+	uint32_t	idle_nap_ms();
 	int		is_mp_sync( int *unreadyPlayerFlag );
 	void		auto_save();
 
