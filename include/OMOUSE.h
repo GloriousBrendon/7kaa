@@ -282,11 +282,6 @@ public:
 	int	is_mouse_event()            { return has_mouse_event; }
 	int	is_key_event()              { return scan_code; }
 	int	is_any_event()              { return has_mouse_event || scan_code; }
-
-	// whether get_event() still has queued input to hand out. The queue is
-	// drained one event per main-loop iteration, so the idle pacer has to
-	// know not to nap while a backlog is waiting.
-	int	is_event_queued()           { return head_ptr != tail_ptr; }
 	int	is_press_button_event()     { return has_mouse_event && (mouse_event_type == LEFT_BUTTON || mouse_event_type == RIGHT_BUTTON); }
 	int	is_release_button_event()   { return has_mouse_event && (mouse_event_type == LEFT_BUTTON_RELEASE || mouse_event_type == RIGHT_BUTTON_RELEASE); }
 
