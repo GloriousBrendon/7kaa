@@ -581,16 +581,23 @@ void Firm::draw_cargo(int cargoCount, char* cargoBitmapPtr)
 {
 	//-------- check if the firm is within the view area --------//
 
-	// One tile of slack on the near edge: with a sub-tile camera offset the
-	// firm one tile before top_x_loc still has part of its cargo pile on
-	// screen, and the draw below already clips via put_bitmap_clip().
-	// (The far-edge halves of these tests compare a TILE coordinate against
-	// ZOOM_WIDTH/ZOOM_HEIGHT, which are pixel counts, so they never fire --
-	// a pre-existing bug, deliberately left alone here.)
-	if( loc_x1 < world.zoom_matrix->top_x_loc-1 || loc_x2 >= world.zoom_matrix->top_x_loc+ZOOM_WIDTH )
+	// Cull only firms lying entirely outside the visible tile range. The far
+	// edge is disp_x_loc/disp_y_loc tiles from the top-left, plus one more
+	// while a sub-tile camera offset is pulling the next column/row into view.
+	// Anything that survives is drawn through put_bitmap_clip() below, which
+	// clips against the zoom window, so a partly visible firm is safe to draw.
+
+	ZoomMatrix* zoomMatrix = world.zoom_matrix;
+
+	int visX1 = zoomMatrix->top_x_loc;
+	int visY1 = zoomMatrix->top_y_loc;
+	int visX2 = visX1 + zoomMatrix->disp_x_loc - 1 + (zoomMatrix->sub_x ? 1 : 0);
+	int visY2 = visY1 + zoomMatrix->disp_y_loc - 1 + (zoomMatrix->sub_y ? 1 : 0);
+
+	if( loc_x2 < visX1 || loc_x1 > visX2 )
 		return;
 
-	if( loc_y1 < world.zoom_matrix->top_y_loc-1 || loc_y2 >= world.zoom_matrix->top_y_loc+ZOOM_HEIGHT )
+	if( loc_y2 < visY1 || loc_y1 > visY2 )
 		return;
 
 	//------ display a pile of raw materials ------//
