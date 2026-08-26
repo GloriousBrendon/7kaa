@@ -81,13 +81,15 @@ static void disp_slide_bar(SlideBar *slideBar, int);
 #define IGOPTION_MAP_ID          0x00000400
 #define IGOPTION_SCALE_QUALITY   0x00000800
 #define IGOPTION_VSYNC           0x00001000
+#define IGOPTION_SCROLL_ALIGN    0x00002000
 #define IGOPTION_PAGE            0x40000000
 #define IGOPTION_ALL             0x7FFFFFFF
 
 
 
 OptionMenu::OptionMenu() : help_group(3), news_group(2), report_group(2) ,
-	show_icon_group(2), show_path_group(4), scale_quality_group(3), vsync_group(2)
+	show_icon_group(2), show_path_group(4), scale_quality_group(3), vsync_group(2),
+	scroll_align_group(2)
 
 {
 	active_flag = 0;
@@ -214,11 +216,33 @@ void OptionMenu::enter(char untilExitFlag)
 		}
 	}
 
+	// --------- initialize scroll cadence button group ---------- //
+	//
+	// Sits in the clear band between the option boxes and the Return/Cancel
+	// buttons: x 415-722, y 498-522. The strip lower down and to the right of
+	// Cancel is not usable -- the decorative corner runs from x=723.
+
+	{
+		const char* scroll_align_label[2] = { _("On"), _("Off") };
+		const int bx1 = 512, by1 = 499, bw = 68, bh = 21, gap = 2;
+
+		for( i = 0; i < 2; ++i )
+		{
+			scroll_align_group[i].create( bx1+i*(bw+gap), by1,
+				bx1+i*(bw+gap)+bw-1, by1+bh-1,
+				ButtonCustom::disp_text_button_func,
+				ButtonCustomPara((void*)scroll_align_label[i], 1-i), 0, 0 );
+		}
+	}
+
 	old_scale_quality = config_adv.vga_scale_quality;
 	scale_quality_changed = 0;
 
 	old_vsync = config_adv.vga_vsync;
 	vsync_changed = 0;
+
+	old_scroll_frame_align = config_adv.scroll_frame_align;
+	scroll_frame_align_changed = 0;
 
 	// --------- other buttons --------//
 	start_button.create(200, 520, "RETURN-U", "RETURN-D", 1, 0);
@@ -265,6 +289,7 @@ void OptionMenu::disp(int needRepaint)
 			vga.use_back();
 			font_san.put(572, 358, _("Scale Filter"));
 			font_san.put(572, 458, _("V-Sync"));
+			font_san.put(420, 503, _("Even Scrolling"));
 			vga.use_front();
 
 			vga_util.blt_buf(0,0,VGA_WIDTH-1,VGA_HEIGHT-1,0);
@@ -330,6 +355,11 @@ void OptionMenu::disp(int needRepaint)
 			// group is ordered { On, Off } with values { 1, 0 }, so the
 			// index is the complement -- same idiom as show_icon_group above
 			vsync_group.paint(1 - config_adv.vga_vsync);
+		}
+		if( refresh_flag & IGOPTION_SCROLL_ALIGN )
+		{
+			// { On, Off } with values { 1, 0 }; paint() takes an INDEX
+			scroll_align_group.paint(1 - config_adv.scroll_frame_align);
 		}
 
 		refresh_flag = 0;
@@ -445,6 +475,13 @@ int OptionMenu::detect()
 		vga.set_vsync( (char) vsync_group[vsync_group()].custom_para.value );
 		vsync_changed = 1;
 	}
+	else if( scroll_align_group.detect() >= 0)
+	{
+		// read fresh by World::scroll_period() on the next scroll step, so
+		// there is nothing to apply here beyond storing the preference
+		config_adv.scroll_frame_align = (char) scroll_align_group[scroll_align_group()].custom_para.value;
+		scroll_frame_align_changed = 1;
+	}
 	else if( start_button.detect(KEY_RETURN) )
 	{
 		if( &config != &tempConfig)
@@ -467,6 +504,9 @@ int OptionMenu::detect()
 
 		if( vsync_changed )
 			config_adv.persist_vga_vsync();
+
+		if( scroll_frame_align_changed )
+			config_adv.persist_scroll_frame_align();
 	}
 	else if( cancel_button.detect(KEY_ESC) )
 	{
@@ -477,6 +517,9 @@ int OptionMenu::detect()
 
 		if( vsync_changed )
 			vga.set_vsync(old_vsync);
+
+		if( scroll_frame_align_changed )
+			config_adv.scroll_frame_align = old_scroll_frame_align;
 
 		exit(0);
 	}

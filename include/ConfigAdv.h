@@ -80,6 +80,11 @@ public:
 	// scenario settings
 	char			scenario_config;
 
+	// scroll settings
+	// snap the map-scroll step period to a whole number of presented
+	// frames, so scroll steps land on an even cadence (see reset())
+	char			scroll_frame_align;
+
 	// town settings
 	int			town_ai_emerge_nation_pop_limit;
 	int			town_ai_emerge_town_pop_limit;
@@ -134,6 +139,9 @@ public:
 
 	// same, for vga_vsync
 	int			persist_vga_vsync();
+
+	// same, for scroll_frame_align
+	int			persist_scroll_frame_align();
 
 private:
 	void			update_check_sum(char *name, char *value);

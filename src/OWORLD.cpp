@@ -368,12 +368,64 @@ int World::detect_scroll()
    if( rc )
    {
       sys.zoom_need_redraw = 1;        // ask the zoom window to refresh next time
-      next_scroll_time     = misc.get_time() + 500/(config.scroll_speed+1);
+      next_scroll_time     = misc.get_time() + scroll_period();
    }
 
    return rc;
 }
 //----------- End of function World::detect_scroll -----------//
+
+
+//--------- Begin of function World::scroll_period ---------//
+//
+// Milliseconds between one whole-tile scroll step and the next.
+//
+// The base period is the original 500/(scroll_speed+1). That value is not
+// generally a whole multiple of the interval Vga::flip() presents at, so the
+// scroll clock and the present clock beat against each other: the number of
+// presented frames between consecutive steps keeps alternating between two
+// values, which reads as an uneven scroll even though the step size is
+// constant. At the default scroll_speed=5 on a 60Hz display, an 83ms period
+// against a 16ms present interval puts 81% of steps 5 frames apart and the
+// other 19% 6 frames apart -- a 20% longer pause roughly twice a second.
+//
+// Rounding the period to the nearest whole number of present intervals makes
+// every gap identical. The step size is unchanged (top_x_loc/top_y_loc are
+// whole tiles), so this evens out the cadence rather than removing the
+// per-step jump.
+//
+// Camera position is client-local -- it is saved, but it is not one of the
+// fields src/OMP_CRC.cpp puts into the multiplayer sync contract -- so this
+// affects presentation only and needs no lockstep-compatibility toggle.
+//
+int World::scroll_period()
+{
+   int basePeriod = 500/(config.scroll_speed+1);
+
+   if( !config_adv.scroll_frame_align )
+      return basePeriod;
+
+   int interval = vga.present_interval();
+
+   // 0 when flip() has nothing to throttle to (an implausibly fast display);
+   // nothing to align against, so keep the raw period.
+   if( interval <= 0 )
+      return basePeriod;
+
+   // Round to nearest whole interval, so the scroll rate moves by at most
+   // half a present interval. That is under 4% at the default scroll_speed=5
+   // (83ms -> 80ms at 60Hz, 84ms at 165Hz), and worst case ~13% at the
+   // fastest scroll speeds, where the period is only a few frames long and
+   // there is no finer whole-frame period to round to.
+   int intervals = (basePeriod + interval/2) / interval;
+
+   // Never round down to a 0ms period and free-run the scroll.
+   if( intervals < 1 )
+      intervals = 1;
+
+   return intervals * interval;
+}
+//----------- End of function World::scroll_period -----------//
 
 
 //--------- Begin of function World::go_loc --------//

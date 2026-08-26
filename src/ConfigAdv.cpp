@@ -364,6 +364,15 @@ int ConfigAdv::persist_vga_vsync()
 //--------- End of function ConfigAdv::persist_vga_vsync -------------//
 
 
+//--------- Begin of function ConfigAdv::persist_scroll_frame_align -------------//
+//
+int ConfigAdv::persist_scroll_frame_align()
+{
+	return persist_setting("scroll_frame_align", scroll_frame_align ? "true" : "false");
+}
+//--------- End of function ConfigAdv::persist_scroll_frame_align -------------//
+
+
 //--------- Begin of function ConfigAdv::reset ---------//
 //
 void ConfigAdv::reset()
@@ -395,6 +404,20 @@ void ConfigAdv::reset()
 	remote_compare_random_seed = 1;
 
 	scenario_config = 1;
+
+	// On by default. The scroll step period, 500/(scroll_speed+1) ms, is not
+	// a whole multiple of the interval Vga::flip() presents at, so the two
+	// clocks beat against each other and the gap between scroll steps keeps
+	// switching between two different frame counts. Simulated at 1ms poll
+	// granularity over 60s at the default scroll_speed=5: at a 60Hz present
+	// interval (16ms) an 83ms period puts 81% of steps 5 frames apart and
+	// 19% of them 6 frames apart -- a 20% longer pause about twice a second.
+	// Snapping the period to the nearest whole number of present intervals
+	// (80ms at 60Hz, 84ms at 165Hz) makes every gap identical, at a scroll
+	// rate within ~4% of the old one. Camera position is client-local and
+	// not part of the multiplayer CRC contract, so this changes presentation
+	// cadence only. Set false to restore the raw 500/(scroll_speed+1) timer.
+	scroll_frame_align = 1;
 
 	town_ai_emerge_nation_pop_limit = 60 * MAX_NATION;
 	town_ai_emerge_town_pop_limit = 1000;
@@ -580,6 +603,11 @@ int ConfigAdv::set(char *name, char *value)
 	else if( !strcmp(name, "scenario_config") )
 	{
 		if( !read_bool(value, &scenario_config) )
+			return 0;
+	}
+	else if( !strcmp(name, "scroll_frame_align") )
+	{
+		if( !read_bool(value, &scroll_frame_align) )
 			return 0;
 	}
 	else if( !strcmp(name, "town_ai_emerge_nation_pop_limit") )

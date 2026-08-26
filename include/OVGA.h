@@ -130,6 +130,9 @@ public:
 	char   is_vsync_granted();
 	char   is_vsync_active()  { return vsync_active; }
 	void   update_present_interval();
+	// ms between presents that flip() is currently throttling to; 0 when
+	// there is nothing to throttle (see update_present_interval())
+	int    present_interval()  { return present_interval_ms; }
 	void   flip();
 	void   save_status_report();
 

@@ -200,6 +200,7 @@ public:
 
 private:
 	int	  	detect_scroll();
+	int		scroll_period();     // ms between whole-tile scroll steps
 	// int		detect_firm_town();
 
 	//--------- ambient sound functions --------//
