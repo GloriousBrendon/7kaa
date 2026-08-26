@@ -36,14 +36,24 @@ enum { INFO_REPAINT=10, INFO_UPDATE, INFO_SPECIAL };
 
 //--------- Define section positions ---------//
 
+// The top menu strip's buttons are baked into the MAINSCR chrome bitmap at
+// fixed positions, so it stays in the legacy coordinate space even when the
+// map viewport beside it grows.
 #define TOP_MENU_X1	 4
 #define TOP_MENU_Y1   4
-#define TOP_MENU_X2   (ZOOM_X2-4)
+#define TOP_MENU_X2   (ZOOM_LEGACY_X2-4)
 #define TOP_MENU_Y2	 30
 
-#define INFO_X1 	586
+// The HUD sidebar (minimap + info panel) is docked to the right edge of the
+// buffer. hud_sidebar_x_offset is how far right of its legacy x=576 origin
+// that edge sits -- 0 whenever the buffer is the legacy 800 wide, so these
+// keep their historical values in legacy mode. Vertical layout is unchanged:
+// the sidebar is docked top-right and keeps its internal y coordinates.
+// (declared in OWORLDMT.h, which MAP_X1 needs it for too)
+
+#define INFO_X1 	(586 + hud_sidebar_x_offset)
 #define INFO_Y1   265
-#define INFO_X2   790
+#define INFO_X2   (790 + hud_sidebar_x_offset)
 #define INFO_Y2	589
 
 #define MSG_X1		INFO_X1

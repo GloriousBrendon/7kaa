@@ -46,17 +46,17 @@
 
 //------------- Define coordinations -----------//
 
-enum { HIRE_BROWSE_X1 = INFO_X1,
-		 HIRE_BROWSE_Y1 = INFO_Y1+52,
-		 HIRE_BROWSE_X2 = INFO_X2,
-		 HIRE_BROWSE_Y2 = HIRE_BROWSE_Y1+144
-	  };
+// INFO_X1/X2 follow the docked sidebar's runtime x position, so this layout
+// table is macros rather than an enum. The y values are unchanged.
+#define HIRE_BROWSE_X1  (INFO_X1)
+#define HIRE_BROWSE_Y1  (INFO_Y1+52)
+#define HIRE_BROWSE_X2  (INFO_X2)
+#define HIRE_BROWSE_Y2  (HIRE_BROWSE_Y1+144)
 
-enum { HIRE_DET_X1 = INFO_X1,
-		 HIRE_DET_Y1 = HIRE_BROWSE_Y2+5,
-		 HIRE_DET_X2 = INFO_X2,
-		 HIRE_DET_Y2 = HIRE_DET_Y1+54
-	  };
+#define HIRE_DET_X1  (INFO_X1)
+#define HIRE_DET_Y1  (HIRE_BROWSE_Y2+5)
+#define HIRE_DET_X2  (INFO_X2)
+#define HIRE_DET_Y2  (HIRE_DET_Y1+54)
 
 //----------- Define static variables ----------//
 

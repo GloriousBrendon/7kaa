@@ -45,7 +45,9 @@
 #define MAX_MAP_WIDTH	200
 #define MAX_MAP_HEIGHT	200
 
-#define MAP_X1          (588+(MAX_MAP_WIDTH-MAP_WIDTH)/2)
+// The minimap rides along with the docked sidebar (see OINFO.h ::
+// hud_sidebar_x_offset); its y position is unchanged.
+#define MAP_X1          (588+hud_sidebar_x_offset+(MAX_MAP_WIDTH-MAP_WIDTH)/2)
 #define MAP_Y1          (56 +(MAX_MAP_HEIGHT-MAP_HEIGHT)/2)
 #define MAP_X2          (MAP_X1+MAP_WIDTH-1)
 #define MAP_Y2          (MAP_Y1+MAP_HEIGHT-1)
@@ -80,6 +82,10 @@
 // Always the ZOOM_LEGACY_* values unless the wide-viewport mode is on.
 extern int zoom_win_x1, zoom_win_y1, zoom_win_x2, zoom_win_y2;
 extern int zoom_win_width, zoom_win_height;
+
+// How far right of its legacy x=576 origin the docked HUD sidebar (minimap +
+// info panel) sits. 0 whenever the buffer is the legacy 800 wide.
+extern int hud_sidebar_x_offset;
 
 #define ZOOM_X1         zoom_win_x1     // World Zoom Window
 #define ZOOM_Y1         zoom_win_y1

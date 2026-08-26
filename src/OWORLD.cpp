@@ -57,6 +57,9 @@ int zoom_win_x1 = ZOOM_LEGACY_X1, zoom_win_y1 = ZOOM_LEGACY_Y1;
 int zoom_win_x2 = ZOOM_LEGACY_X2, zoom_win_y2 = ZOOM_LEGACY_Y2;
 int zoom_win_width = ZOOM_LEGACY_WIDTH, zoom_win_height = ZOOM_LEGACY_HEIGHT;
 
+// 0 = sidebar at its legacy x=576; a widened buffer pushes it to the right edge.
+int hud_sidebar_x_offset = 0;
+
 //----------- Begin of function World::World ----------//
 
 World::World()

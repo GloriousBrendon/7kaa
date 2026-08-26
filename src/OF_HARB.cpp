@@ -49,17 +49,17 @@
 
 //------------- Define coordinations -----------//
 
-enum { SHIP_BROWSE_X1 = INFO_X1,
-		 SHIP_BROWSE_Y1 = INFO_Y1+54,
-		 SHIP_BROWSE_X2 = INFO_X2,
-		 SHIP_BROWSE_Y2 = SHIP_BROWSE_Y1+100
-	  };
+// INFO_X1/X2 follow the docked sidebar's runtime x position, so this layout
+// table is macros rather than an enum. The y values are unchanged.
+#define SHIP_BROWSE_X1  (INFO_X1)
+#define SHIP_BROWSE_Y1  (INFO_Y1+54)
+#define SHIP_BROWSE_X2  (INFO_X2)
+#define SHIP_BROWSE_Y2  (SHIP_BROWSE_Y1+100)
 
-enum { SHIP_DET_X1 = INFO_X1,
-		 SHIP_DET_Y1 = SHIP_BROWSE_Y2+5,
-		 SHIP_DET_X2 = INFO_X2,
-		 SHIP_DET_Y2 = SHIP_DET_Y1+92
-	  };
+#define SHIP_DET_X1  (INFO_X1)
+#define SHIP_DET_Y1  (SHIP_BROWSE_Y2+5)
+#define SHIP_DET_X2  (INFO_X2)
+#define SHIP_DET_Y2  (SHIP_DET_Y1+92)
 
 //---------- Define constant ------------//
 
