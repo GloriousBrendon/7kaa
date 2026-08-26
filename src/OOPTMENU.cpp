@@ -188,9 +188,14 @@ void OptionMenu::enter(char untilExitFlag)
 
 	// --------- initialize scale quality (rendering filter) button group ---------- //
 
+	// Moved out of the right column. At x 572 with bw 74 the three buttons ran
+	// to x=797, well past the panel's inner edge, and the row straddled the top
+	// border of the Show Unit Paths box. The clear band below the option boxes
+	// (y 498-519, clear from x=25 to x=773) has room for the whole control.
+
 	{
 		const char* scale_quality_label[3] = { _("Nearest"), _("Linear"), _("Best") };
-		const int bx1 = 572, by1 = 380, bw = 74, bh = 21, gap = 2;
+		const int bx1 = 170, by1 = 499, bw = 62, bh = 21, gap = 2;
 
 		for( i = 0; i < 3; ++i )
 		{
@@ -203,9 +208,15 @@ void OptionMenu::enter(char untilExitFlag)
 
 	// --------- initialize vsync button group ---------- //
 
+	// Moved for the same reason: at y 480 the row overlapped the bottom border
+	// of the Show Unit Paths box, and its label sat on top of the "Main Map"
+	// button. Placed in the strip to the right of the Cancel button (which
+	// ends at x=581); the decorative corner starts at x=723 in this band, so
+	// the row stops at x=714.
+
 	{
 		const char* vsync_label[2] = { _("On"), _("Off") };
-		const int bx1 = 572, by1 = 480, bw = 74, bh = 21, gap = 2;
+		const int bx1 = 585, by1 = 546, bw = 64, bh = 21, gap = 2;
 
 		for( i = 0; i < 2; ++i )
 		{
@@ -297,8 +308,8 @@ void OptionMenu::disp(int needRepaint)
 			image_interface.put_to_buf( &vga_back, "OPTIONS");
 
 			vga.use_back();
-			font_san.put(572, 358, _("Scale Filter"));
-			font_san.put(572, 458, _("V-Sync"));
+			font_san.put(82, 503, _("Scale Filter"));
+			font_san.put(585, 528, _("V-Sync"));
 			font_san.put(420, 503, _("Scrolling"));
 			vga.use_front();
 
