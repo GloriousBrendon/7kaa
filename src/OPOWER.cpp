@@ -272,8 +272,8 @@ int Power::detect_frame()
 				if( mouseX >= ZOOM_X1 && mouseX <= ZOOM_X2 &&		// if the mouse is inside the zoom area
 					 mouseY >= ZOOM_Y1 && mouseY <= ZOOM_Y2 )
 				{
-					int curXLoc = world.zoom_matrix->top_x_loc + (mouseX-ZOOM_X1)/ZOOM_LOC_WIDTH;
-					int curYLoc = world.zoom_matrix->top_y_loc + (mouseY-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+					int curXLoc = (mouseX-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+					int curYLoc = (mouseY-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
 
 					locPtr = world.get_loc(curXLoc, curYLoc);
 
@@ -492,8 +492,8 @@ int Power::detect_action()
 	if( mouseX >= ZOOM_X1 && mouseX <= ZOOM_X2 &&		// if the mouse is inside the zoom area
 		 mouseY >= ZOOM_Y1 && mouseY <= ZOOM_Y2 )
 	{
-		curXLoc = world.zoom_matrix->top_x_loc + (mouseX-ZOOM_X1)/ZOOM_LOC_WIDTH;
-		curYLoc = world.zoom_matrix->top_y_loc + (mouseY-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+		curXLoc = (mouseX-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+		curYLoc = (mouseY-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
 	}
 
 	//---------- if click on the map window -----------//
@@ -901,8 +901,8 @@ Location* Power::test_detect(int curX, int curY, char *mobileType)
 
 	//------ if mouse cursor is pointing at a firm, return now ------//
 
-	int curXLoc = world.zoom_matrix->top_x_loc + (curX-ZOOM_X1)/ZOOM_LOC_WIDTH;
-	int curYLoc = world.zoom_matrix->top_y_loc + (curY-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+	int curXLoc = (curX-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+	int curYLoc = (curY-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
 
 	Location* locPtr = world.get_loc(curXLoc,curYLoc);
 
@@ -1023,13 +1023,13 @@ Location* Power::test_detect(int curX, int curY, char *mobileType)
 //
 int Power::detect_select(int selX1, int selY1, int selX2, int selY2, int recallGroup, int shiftSelect)
 {
-	int topXLoc = world.zoom_matrix->top_x_loc;
-	int topYLoc = world.zoom_matrix->top_y_loc;
-
-	int selXLoc1 = topXLoc + (selX1-ZOOM_X1)/ZOOM_LOC_WIDTH;
-	int selYLoc1 = topYLoc + (selY1-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
-	int selXLoc2 = topXLoc + (selX2-ZOOM_X1)/ZOOM_LOC_WIDTH;
-	int selYLoc2 = topYLoc + (selY2-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+	// Via the pixel origin, like the absSel* values further down, so the
+	// selection rectangle keeps picking the tile actually under the cursor
+	// once the camera can sit part-way through a tile.
+	int selXLoc1 = (selX1-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+	int selYLoc1 = (selY1-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
+	int selXLoc2 = (selX2-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+	int selYLoc2 = (selY2-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
 
 	int firstXLoc = selXLoc1, firstYLoc = selYLoc1;		// first location to be tested
 
@@ -1256,8 +1256,8 @@ int Power::detect_select(int selX1, int selY1, int selX2, int selY2, int recallG
 
 	if( selectedCount==0 && selectOneOnly && !recallGroup )
 	{
-		int selXLoc = topXLoc + (selX1-ZOOM_X1)/ZOOM_LOC_WIDTH;
-		int selYLoc = topYLoc + (selY1-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+		int selXLoc = (selX1-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+		int selYLoc = (selY1-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
 
 		Location* locPtr = world.get_loc(selXLoc, selYLoc);
 
@@ -1272,8 +1272,8 @@ int Power::detect_select(int selX1, int selY1, int selX2, int selY2, int recallG
 
 	if( selectedCount==0 && selectOneOnly && !recallGroup )
 	{
-		int selXLoc = topXLoc + (selX1-ZOOM_X1)/ZOOM_LOC_WIDTH;
-		int selYLoc = topYLoc + (selY1-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+		int selXLoc = (selX1-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+		int selYLoc = (selY1-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
 
 		Location* locPtr = world.get_loc(selXLoc, selYLoc);
 

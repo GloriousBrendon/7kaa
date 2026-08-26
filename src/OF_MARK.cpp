@@ -576,8 +576,8 @@ void FirmMarket::draw(int displayLayer)
 			cargoCount = MAX_CARGO * (int)marketGoods->stock_qty/(int)max_stock_qty;
 			cargoCount = MAX(1, cargoCount);
 
-			x = ZOOM_X1 + (loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH + section_point_array[sectionId].x;
-			y = ZOOM_Y1 + (loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT + section_point_array[sectionId].y;
+			x = ZOOM_X1 + loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x + section_point_array[sectionId].x;
+			y = ZOOM_Y1 + loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y + section_point_array[sectionId].y;
 
 			sectionId++;
 

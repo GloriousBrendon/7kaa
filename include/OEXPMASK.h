@@ -40,6 +40,9 @@ public:
 	void deinit();
 
 	void draw(short xLoc, short yLoc, int northRow, int thisRow, int southRow);
+	// same, but onto an arbitrary buffer -- lets a caller run the mask over a
+	// scratch tile when the real destination tile straddles the window edge
+	void draw_to(char *imageBuf, int pitch, short xLoc, short yLoc, int northRow, int thisRow, int southRow);
 };
 
 extern ExploredMask explored_mask;

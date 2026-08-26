@@ -373,6 +373,15 @@ int ConfigAdv::persist_scroll_frame_align()
 //--------- End of function ConfigAdv::persist_scroll_frame_align -------------//
 
 
+//--------- Begin of function ConfigAdv::persist_scroll_sub_pixel -------------//
+//
+int ConfigAdv::persist_scroll_sub_pixel()
+{
+	return persist_setting("scroll_sub_pixel", scroll_sub_pixel ? "true" : "false");
+}
+//--------- End of function ConfigAdv::persist_scroll_sub_pixel -------------//
+
+
 //--------- Begin of function ConfigAdv::reset ---------//
 //
 void ConfigAdv::reset()
@@ -418,6 +427,18 @@ void ConfigAdv::reset()
 	// not part of the multiplayer CRC contract, so this changes presentation
 	// cadence only. Set false to restore the raw 500/(scroll_speed+1) timer.
 	scroll_frame_align = 1;
+
+	// On by default. Frame-aligning the step period (above) makes the jump
+	// cadence even but cannot make the jump smaller: top_x_loc is a whole-tile
+	// integer, so every step is a 32px teleport of the entire view. Play-test
+	// after the alignment change confirmed the remaining chop is that step
+	// size, not its timing. This scrolls in pixels instead, at the same
+	// average speed, by keeping a sub-tile offset that Sys::disp_zoom() folds
+	// into World::view_top_x. Camera position is client-local and absent from
+	// src/OMP_CRC.cpp, so this is presentation only. When on, it supersedes
+	// scroll_frame_align -- there are no discrete steps left to align. Set
+	// false to go back to whole-tile stepping.
+	scroll_sub_pixel = 1;
 
 	town_ai_emerge_nation_pop_limit = 60 * MAX_NATION;
 	town_ai_emerge_town_pop_limit = 1000;
@@ -608,6 +629,11 @@ int ConfigAdv::set(char *name, char *value)
 	else if( !strcmp(name, "scroll_frame_align") )
 	{
 		if( !read_bool(value, &scroll_frame_align) )
+			return 0;
+	}
+	else if( !strcmp(name, "scroll_sub_pixel") )
+	{
+		if( !read_bool(value, &scroll_sub_pixel) )
 			return 0;
 	}
 	else if( !strcmp(name, "town_ai_emerge_nation_pop_limit") )

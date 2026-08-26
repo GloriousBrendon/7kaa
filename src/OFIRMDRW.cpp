@@ -319,11 +319,11 @@ int Firm::draw_detect_link_line(int actionDetect)
 
 	//-------- set source points ----------//
 
-	int srcX = ( ZOOM_X1 + (loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+	int srcX = ( ZOOM_X1 + loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-	int srcY = ( ZOOM_Y1 + (loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+	int srcY = ( ZOOM_Y1 + loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 	//------ draw lines to linked firms ---------//
 
@@ -334,11 +334,11 @@ int Firm::draw_detect_link_line(int actionDetect)
 	{
 		firmPtr = firm_array[linked_firm_array[i]];
 
-		firmX = ( ZOOM_X1 + (firmPtr->loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (firmPtr->loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+		firmX = ( ZOOM_X1 + firmPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (firmPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-		firmY = ( ZOOM_Y1 + (firmPtr->loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (firmPtr->loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+		firmY = ( ZOOM_Y1 + firmPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (firmPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 		anim_line.draw_line(&vga_back, srcX, srcY, firmX, firmY, linked_firm_enable_array[i]==LINK_EE );
 
@@ -381,11 +381,11 @@ int Firm::draw_detect_link_line(int actionDetect)
 	{
 		townPtr = town_array[linked_town_array[i]];
 
-		townX = ( ZOOM_X1 + (townPtr->loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (townPtr->loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+		townX = ( ZOOM_X1 + townPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (townPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-		townY = ( ZOOM_Y1 + (townPtr->loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (townPtr->loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+		townY = ( ZOOM_Y1 + townPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (townPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 		if( worker_array && selected_worker_id &&
 			 worker_array[selected_worker_id-1].town_recno == townPtr->town_recno )
@@ -581,16 +581,22 @@ void Firm::draw_cargo(int cargoCount, char* cargoBitmapPtr)
 {
 	//-------- check if the firm is within the view area --------//
 
-	if( loc_x1 < world.zoom_matrix->top_x_loc || loc_x2 >= world.zoom_matrix->top_x_loc+ZOOM_WIDTH )
+	// One tile of slack on the near edge: with a sub-tile camera offset the
+	// firm one tile before top_x_loc still has part of its cargo pile on
+	// screen, and the draw below already clips via put_bitmap_clip().
+	// (The far-edge halves of these tests compare a TILE coordinate against
+	// ZOOM_WIDTH/ZOOM_HEIGHT, which are pixel counts, so they never fire --
+	// a pre-existing bug, deliberately left alone here.)
+	if( loc_x1 < world.zoom_matrix->top_x_loc-1 || loc_x2 >= world.zoom_matrix->top_x_loc+ZOOM_WIDTH )
 		return;
 
-	if( loc_y1 < world.zoom_matrix->top_y_loc || loc_y2 >= world.zoom_matrix->top_y_loc+ZOOM_HEIGHT )
+	if( loc_y1 < world.zoom_matrix->top_y_loc-1 || loc_y2 >= world.zoom_matrix->top_y_loc+ZOOM_HEIGHT )
 		return;
 
 	//------ display a pile of raw materials ------//
 
-	int x = ZOOM_X1 + (loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH;
-	int y = ZOOM_Y1 + (loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT;
+	int x = ZOOM_X1 + loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x;
+	int y = ZOOM_Y1 + loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y;
 
 	for( int i=0 ; i<cargoCount ; i++ )
 	{

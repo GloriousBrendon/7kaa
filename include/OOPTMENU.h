@@ -52,7 +52,7 @@ public:
 	ButtonCustomGroup show_path_group;
 	ButtonCustomGroup scale_quality_group;
 	ButtonCustomGroup vsync_group;
-	ButtonCustomGroup scroll_align_group;
+	ButtonCustomGroup scroll_mode_group;
 	Button3D start_button, cancel_button;
 
 	char	old_scale_quality;
@@ -62,7 +62,8 @@ public:
 	char	vsync_changed;
 
 	char	old_scroll_frame_align;
-	char	scroll_frame_align_changed;
+	char	old_scroll_sub_pixel;
+	char	scroll_mode_changed;
 
 public:
 	OptionMenu();

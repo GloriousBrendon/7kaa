@@ -59,8 +59,8 @@ void Town::draw(int displayLayer)
 
 	if( displayLayer==4 )
 	{
-		int townX1 = ZOOM_X1 + (loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH;
-		int townY1 = ZOOM_Y1 + (loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT;
+		int townX1 = ZOOM_X1 + loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x;
+		int townY1 = ZOOM_Y1 + loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y;
 
 		townX1 += (STD_TOWN_LOC_WIDTH  * ZOOM_LOC_WIDTH  - get_bitmap_width(townLayout->ground_bitmap_ptr))/2;		// adjust offset
 		townY1 += (STD_TOWN_LOC_HEIGHT * ZOOM_LOC_HEIGHT - get_bitmap_height(townLayout->ground_bitmap_ptr))/2;	// adjust offset
@@ -149,10 +149,13 @@ void Town::draw_farm(int absBaseX, int absBaseY, int farmId)
 //
 int Town::is_in_zoom_win()
 {
+	// One tile of slack on the far edge: with a sub-tile camera offset the
+	// column/row just past disp_x_loc is partly on screen, and culling it
+	// would pop the town out a tile early while scrolling.
 	int x1=world.zoom_matrix->top_x_loc;
 	int y1=world.zoom_matrix->top_y_loc;
-	int x2=x1+world.zoom_matrix->disp_x_loc-1;
-	int y2=y1+world.zoom_matrix->disp_y_loc-1;
+	int x2=x1+world.zoom_matrix->disp_x_loc-1 + (world.zoom_matrix->sub_x ? 1 : 0);
+	int y2=y1+world.zoom_matrix->disp_y_loc-1 + (world.zoom_matrix->sub_y ? 1 : 0);
 
 	return misc.is_touch( x1, y1, x2, y2, loc_x1, loc_y1, loc_x2, loc_y2 );
 }
@@ -183,11 +186,11 @@ int Town::draw_detect_link_line(int actionDetect)
 {
 	//-------- set source points ----------//
 
-	int srcX = ( ZOOM_X1 + (loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+	int srcX = ( ZOOM_X1 + loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-	int srcY = ( ZOOM_Y1 + (loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+	int srcY = ( ZOOM_Y1 + loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 	//------ draw lines to linked firms ---------//
 
@@ -198,11 +201,11 @@ int Town::draw_detect_link_line(int actionDetect)
 		int firmX, firmY;
 		Firm *firmPtr = firm_array[linked_firm_array[i]];
 
-		firmX = ( ZOOM_X1 + (firmPtr->loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (firmPtr->loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+		firmX = ( ZOOM_X1 + firmPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (firmPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-		firmY = ( ZOOM_Y1 + (firmPtr->loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (firmPtr->loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+		firmY = ( ZOOM_Y1 + firmPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (firmPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 		anim_line.draw_line(&vga_back, srcX, srcY, firmX, firmY, linked_firm_enable_array[i]==LINK_EE );
 
@@ -287,11 +290,11 @@ int Town::draw_detect_link_line(int actionDetect)
 
 		Town *townPtr = town_array[townRecno];
 
-		townX = ( ZOOM_X1 + (townPtr->loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (townPtr->loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+		townX = ( ZOOM_X1 + townPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (townPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-		townY = ( ZOOM_Y1 + (townPtr->loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (townPtr->loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+		townY = ( ZOOM_Y1 + townPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (townPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 		if ( !awesome_lines_flag || (townPtr->nation_recno != nation_array.player_recno) )
 			anim_line.draw_line(&vga_back, srcX, srcY, townX, townY, linked_town_enable_array[i]==LINK_EE );
@@ -313,10 +316,10 @@ int Town::draw_detect_link_line(int actionDetect)
 			if (townRecno == town_recno) continue;
 
 			int townX, townY;
-			townX = ( ZOOM_X1 + (townPtr->loc_x1-world.zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-					+ ZOOM_X1 + (townPtr->loc_x2-world.zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
-			townY = ( ZOOM_Y1 + (townPtr->loc_y1-world.zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-						+ ZOOM_Y1 + (townPtr->loc_y2-world.zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+			townX = ( ZOOM_X1 + townPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+					+ ZOOM_X1 + (townPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
+			townY = ( ZOOM_Y1 + townPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+						+ ZOOM_Y1 + (townPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 			// If awesome_lines_flag is true then draw the aminated lines on all towns in the town-network
 			if (awesome_lines_flag)

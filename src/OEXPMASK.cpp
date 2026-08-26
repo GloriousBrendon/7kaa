@@ -27,6 +27,7 @@
 #include <OFILE.h>
 #include <OWORLDMT.h>
 #include <OVGABUF.h>
+#include <IMGFUN.h>
 #include <OSTR.h>
 #include <OCOLTBL.h>
 #include <OCONFIG.h>
@@ -88,15 +89,21 @@ void ExploredMask::deinit()
 //
 void ExploredMask::draw(short x, short y, int northRow, int thisRow, int southRow)
 {
+	draw_to(vga_back.buf_ptr(), vga_back.buf_pitch(), x, y, northRow, thisRow, southRow);
+}
+
+
+void ExploredMask::draw_to(char *imageBuf, int pitch, short x, short y, int northRow, int thisRow, int southRow)
+{
 	switch(config.explore_mask_method)
 	{
 	case 0:
 		break;
 	case 1:		// use bit masking
-		vga_back.explore_mask(x, y, mask_bitmap, northRow, thisRow, southRow);
+		IMGexploreMask32x32(imageBuf, pitch, x, y, mask_bitmap, northRow, thisRow, southRow);
 		break;
 	case 2:		// use remapping
-		vga_back.explore_remap(x, y, remap_bitmap, (char **)brightness_table->get_table_array(),
+		IMGexploreRemap32x32(imageBuf, pitch, x, y, remap_bitmap, (char **)brightness_table->get_table_array(),
 			northRow, thisRow, southRow);
 		break;
 	default:

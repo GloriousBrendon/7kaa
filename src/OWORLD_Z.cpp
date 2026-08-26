@@ -183,10 +183,10 @@ static void draw_unit_path_on_zoom_map(int displayLayer)
 		//-----------------------------------------------------------//
 		if(unitPtr->cur_x!=unitPtr->go_x || unitPtr->cur_y!=unitPtr->go_y)
 		{
-			lineFromX = unitPtr->go_x - world.zoom_matrix->top_x_loc*ZOOM_LOC_WIDTH + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
-			lineFromY = unitPtr->go_y - world.zoom_matrix->top_y_loc*ZOOM_LOC_HEIGHT + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
-			lineToX = unitPtr->cur_x - world.zoom_matrix->top_x_loc*ZOOM_LOC_WIDTH + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
-			lineToY = unitPtr->cur_y - world.zoom_matrix->top_y_loc*ZOOM_LOC_HEIGHT + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
+			lineFromX = unitPtr->go_x - World::view_top_x + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
+			lineFromY = unitPtr->go_y - World::view_top_y + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
+			lineToX = unitPtr->cur_x - World::view_top_x + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
+			lineToY = unitPtr->cur_y - World::view_top_y + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
 			anim_line.draw_line(&vga_back, lineFromX, lineFromY, lineToX, lineToY);
 		}
 
@@ -194,12 +194,12 @@ static void draw_unit_path_on_zoom_map(int displayLayer)
 		err_when(resultNodeRecno<1);
 		resultNode1 = unitPtr->result_node_array + resultNodeRecno - 1;
 		resultNode2 = resultNode1 + 1;
-		lineToX = (resultNode1->node_x - world.zoom_matrix->top_x_loc)*ZOOM_LOC_WIDTH + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
-		lineToY = (resultNode1->node_y - world.zoom_matrix->top_y_loc)*ZOOM_LOC_HEIGHT	+ ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
+		lineToX = resultNode1->node_x * ZOOM_LOC_WIDTH - World::view_top_x + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
+		lineToY = resultNode1->node_y * ZOOM_LOC_HEIGHT - World::view_top_y	+ ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
 		for(j=resultNodeRecno+1; j<=resultNodeCount; j++, resultNode1++, resultNode2++)
 		{
-			lineFromX = (resultNode2->node_x - world.zoom_matrix->top_x_loc)*ZOOM_LOC_WIDTH + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
-			lineFromY = (resultNode2->node_y - world.zoom_matrix->top_y_loc)*ZOOM_LOC_HEIGHT + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
+			lineFromX = resultNode2->node_x * ZOOM_LOC_WIDTH - World::view_top_x + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
+			lineFromY = resultNode2->node_y * ZOOM_LOC_HEIGHT - World::view_top_y + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
 			anim_line.draw_line(&vga_back, lineFromX, lineFromY, lineToX, lineToY);
 			lineToX = lineFromX;
 			lineToY = lineFromY;
@@ -245,8 +245,8 @@ static void draw_unit_way_point_on_zoom_map()
 			resultNode1 = unitPtr->way_point_array;
 			// ##### begin Gilbert 12/11 #######//
 			// char *chPtr = image_icon.get_ptr("WAYPOINT");
-			lineToX = (resultNode1->node_x - world.zoom_matrix->top_x_loc)*ZOOM_LOC_WIDTH + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
-			lineToY = (resultNode1->node_y - world.zoom_matrix->top_y_loc)*ZOOM_LOC_HEIGHT	+ ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
+			lineToX = resultNode1->node_x * ZOOM_LOC_WIDTH - World::view_top_x + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
+			lineToY = resultNode1->node_y * ZOOM_LOC_HEIGHT - World::view_top_y	+ ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
 			world.zoom_matrix->put_bitmap_clip(lineToX+chOffsetX, lineToY+chOffsetY, chPtr);
 			// ##### begin Gilbert 12/11 #######//
 
@@ -255,8 +255,8 @@ static void draw_unit_way_point_on_zoom_map()
 				resultNode2 = resultNode1+1;
 				for(j=1; j<resultNodeCount; j++, resultNode1++, resultNode2++)
 				{
-					lineFromX = (resultNode2->node_x - world.zoom_matrix->top_x_loc)*ZOOM_LOC_WIDTH + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
-					lineFromY = (resultNode2->node_y - world.zoom_matrix->top_y_loc)*ZOOM_LOC_HEIGHT + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
+					lineFromX = resultNode2->node_x * ZOOM_LOC_WIDTH - World::view_top_x + ZOOM_X1 + ZOOM_LOC_WIDTH/2;
+					lineFromY = resultNode2->node_y * ZOOM_LOC_HEIGHT - World::view_top_y + ZOOM_Y1 + ZOOM_LOC_HEIGHT/2;
 					anim_line.draw_line(&vga_back, lineFromX, lineFromY, lineToX, lineToY, 0, 1);
 					lineToX = lineFromX;
 					lineToY = lineFromY;
@@ -288,6 +288,8 @@ ZoomMatrix::ZoomMatrix() : land_disp_sort_array(sizeof(DisplaySort),100),
 //---------- Begin of function ZoomMatrix::init_para ------------//
 void ZoomMatrix::init_para()
 {
+	sub_x = 0;
+	sub_y = 0;
 	init_rain = 0;
 	// #### begin Gilbert 7/10 ######//
 	rain.clear();
@@ -305,6 +307,67 @@ void ZoomMatrix::init_para()
 //---------- End of function ZoomMatrix::init_para ----------//
 
 
+//--- running an in-place 32x32 block op on a tile that straddles the edge ---//
+//
+// The explored-mask and fog-of-war primitives read AND write the destination,
+// so unlike the terrain blits they cannot simply be handed a source rectangle.
+// Instead the visible part of the tile is copied into a private 32x32 scratch
+// buffer, the primitive is run over that at pitch 32, and only the visible
+// part is copied back. Every one of these primitives is per-pixel (they take
+// their neighbour information as row bitmasks, not by sampling adjacent
+// pixels), so the untouched garbage outside the visible region cannot bleed
+// into the result.
+
+static char tile_scratch[ZOOM_LOC_WIDTH*ZOOM_LOC_HEIGHT];
+
+static void tile_scratch_load(int x, int y, int cx1, int cy1, int cx2, int cy2)
+{
+	char* imageBuf = vga_back.buf_ptr();
+	int   pitch    = vga_back.buf_pitch();
+	int   width    = cx2-cx1+1;
+
+	for( int py=cy1 ; py<=cy2 ; ++py )
+		memcpy( &tile_scratch[ (py-y)*ZOOM_LOC_WIDTH + (cx1-x) ],
+				  &imageBuf[ py*pitch + cx1 ], width );
+}
+
+static void tile_scratch_store(int x, int y, int cx1, int cy1, int cx2, int cy2)
+{
+	char* imageBuf = vga_back.buf_ptr();
+	int   pitch    = vga_back.buf_pitch();
+	int   width    = cx2-cx1+1;
+
+	for( int py=cy1 ; py<=cy2 ; ++py )
+		memcpy( &imageBuf[ py*pitch + cx1 ],
+				  &tile_scratch[ (py-y)*ZOOM_LOC_WIDTH + (cx1-x) ], width );
+}
+
+
+// The two procedural tile overlays go through the same scratch buffer. Doing
+// it this way rather than reimplementing them with bounds checks matters:
+// their dot patterns depend on private constants inside
+// src/imgfun/generic/I_SNOW.cpp, and each has a hand-written x86 assembly
+// counterpart under src/imgfun/x86/. A local copy would silently drift from
+// whichever of the two the build actually links. Both write only a subset of
+// their pixels and leave the rest, which the load/store round-trip preserves.
+
+static void pixelize_32x32_clip(int tileX, int tileY, int offX, int offY, int color,
+										  int cx1, int cy1, int cx2, int cy2)
+{
+	tile_scratch_load(tileX, tileY, cx1, cy1, cx2, cy2);
+	IMGpixel32x32(tile_scratch, ZOOM_LOC_WIDTH, offX, offY, color);
+	tile_scratch_store(tileX, tileY, cx1, cy1, cx2, cy2);
+}
+
+static void snow_32x32_clip(int tileX, int tileY, int randSeed, int seaLevel,
+									 int cx1, int cy1, int cx2, int cy2)
+{
+	tile_scratch_load(tileX, tileY, cx1, cy1, cx2, cy2);
+	IMGsnow32x32(tile_scratch, ZOOM_LOC_WIDTH, 0, 0, randSeed, seaLevel);
+	tile_scratch_store(tileX, tileY, cx1, cy1, cx2, cy2);
+}
+
+
 //---------- Begin of function ZoomMatrix::draw ------------//
 //
 // Draw world map
@@ -315,8 +378,17 @@ void ZoomMatrix::draw()
 	Location* locPtr;
 	char*     nationColorArray = nation_array.nation_power_color_array;
 
-	int maxXLoc = top_x_loc + disp_x_loc;        // divide by 2 for world_info
-	int maxYLoc = top_y_loc + disp_y_loc;
+	// With a sub-tile offset the first tile is only partly on screen, so one
+	// extra column/row is needed to fill the gap it leaves at the far edge.
+	// Clamped to the map bounds: scroll_pixel() already refuses to put the
+	// camera where that extra tile would not exist, this is belt and braces.
+	int maxXLoc = top_x_loc + disp_x_loc + (sub_x ? 1 : 0);
+	int maxYLoc = top_y_loc + disp_y_loc + (sub_y ? 1 : 0);
+
+	if( maxXLoc > max_x_loc )
+		maxXLoc = max_x_loc;
+	if( maxYLoc > max_y_loc )
+		maxYLoc = max_y_loc;
 
 	dispPower = (world.map_matrix->map_mode == MAP_MODE_POWER &&
 					 world.map_matrix->power_mode ) ||
@@ -329,22 +401,72 @@ void ZoomMatrix::draw()
 
 	int nationRecno, borderColor;
 
-	for( y=image_y1,yLoc=top_y_loc ; yLoc<maxYLoc ; yLoc++, y+=loc_height )
+	for( y=image_y1-sub_y,yLoc=top_y_loc ; yLoc<maxYLoc ; yLoc++, y+=loc_height )
 	{
 		locPtr = get_loc(top_x_loc,yLoc);
 
 		long snowSeed = (snow_ground_array.snow_pattern << 16) + (yLoc << 8);
 
-		for( x=image_x1,xLoc=top_x_loc ; xLoc<maxXLoc ; xLoc++, x+=loc_width, locPtr++ )
+		//--- this row's visible vertical span within the zoom window ---//
+		//
+		// Hoisted out of the inner loop, along with a flag for "this row is
+		// cut": with no sub-tile offset nothing is cut at all, so the per-tile
+		// test below costs two comparisons and the original unclipped blits
+		// are still what runs.
+
+		int cy1 = y, cy2 = y+ZOOM_LOC_HEIGHT-1;
+		int rowClipped = ( cy1 < ZOOM_Y1 || cy2 > ZOOM_Y2 );
+
+		if( rowClipped )
 		{
+			cy1 = MAX(cy1, ZOOM_Y1);
+			cy2 = MIN(cy2, ZOOM_Y2);
+
+			if( cy1 > cy2 )		// wholly above or below the window
+				continue;
+		}
+
+		for( x=image_x1-sub_x,xLoc=top_x_loc ; xLoc<maxXLoc ; xLoc++, x+=loc_width, locPtr++ )
+		{
+			//--- this tile's visible span, and whether it is cut at all ---//
+
+			int cx1 = x, cx2 = x+ZOOM_LOC_WIDTH-1;
+			int tileClipped = ( rowClipped || cx1 < ZOOM_X1 || cx2 > ZOOM_X2 );
+			int srcX1 = 0, srcY1 = 0;
+			int srcX2 = ZOOM_LOC_WIDTH-1, srcY2 = ZOOM_LOC_HEIGHT-1;
+
+			if( tileClipped )
+			{
+				cx1 = MAX(cx1, ZOOM_X1);
+				cx2 = MIN(cx2, ZOOM_X2);
+
+				if( cx1 > cx2 )		// wholly left or right of the window
+					continue;
+
+				// source rectangle inside the 32x32 tile
+				srcX1 = cx1-x; srcX2 = cx2-x;
+				srcY1 = cy1-y; srcY2 = cy2-y;
+			}
+
 			if( locPtr->explored() )		// only draw if the location has been explored
 			{
 				//---------- draw terrain bitmap -----------//
 
-				vga_back.put_bitmap_32x32( x, y, terrain_res[locPtr->terrain_id]->bitmap_ptr );
+				char *terrainBitmap = terrain_res[locPtr->terrain_id]->bitmap_ptr;
 				char *overlayBitmap = terrain_res[locPtr->terrain_id]->get_bitmap(sys.frame_count /4);
-				if( overlayBitmap)
-					vga_back.put_bitmap_trans_decompress( x, y, overlayBitmap);
+
+				if( tileClipped )
+				{
+					vga_back.put_bitmap_area( x, y, terrainBitmap, srcX1, srcY1, srcX2, srcY2 );
+					if( overlayBitmap)
+						vga_back.put_bitmap_area_trans_decompress( x, y, overlayBitmap, srcX1, srcY1, srcX2, srcY2 );
+				}
+				else
+				{
+					vga_back.put_bitmap_32x32( x, y, terrainBitmap );
+					if( overlayBitmap)
+						vga_back.put_bitmap_trans_decompress( x, y, overlayBitmap);
+				}
 
 				#ifdef DEBUG
 				if(debug2_enable_flag)
@@ -369,7 +491,10 @@ void ZoomMatrix::draw()
 				{
 					if( config.snow_ground==1 && snow_ground_array.snow_thick > 0)
 					{
-						vga_back.snow_32x32(x,y, snowSeed+xLoc, 0xffff - snow_ground_array.snow_thick);
+						if( tileClipped )
+							snow_32x32_clip(x, y, snowSeed+xLoc, 0xffff - snow_ground_array.snow_thick, cx1, cy1, cx2, cy2);
+						else
+							vga_back.snow_32x32(x,y, snowSeed+xLoc, 0xffff - snow_ground_array.snow_thick);
 					}
 
 					if( config.snow_ground==2)
@@ -394,21 +519,33 @@ void ZoomMatrix::draw()
 
 				if( dispPower && (nationRecno=locPtr->power_nation_recno) > 0 )
 				{
-					vga_back.pixelize_32x32( x, y, nationColorArray[nationRecno] );
+					if( tileClipped )
+						pixelize_32x32_clip( x, y, 0, 0, nationColorArray[nationRecno], cx1, cy1, cx2, cy2 );
+					else
+						vga_back.pixelize_32x32( x, y, nationColorArray[nationRecno] );
 
 					borderColor = nationColorArray[nationRecno] + 1;
 
+					// bar() is unclipped too, but it takes an explicit rect, so
+					// intersecting the rect with the tile's visible span is
+					// enough -- no separate clipped variant needed. Each edge is
+					// skipped outright when it falls outside the window.
+
 					if( yLoc==0 || get_loc(xLoc, yLoc-1)->power_nation_recno!=nationRecno )
-						vga_back.bar( x, y, x+31, y, borderColor );
+						if( y >= cy1 && y <= cy2 )
+							vga_back.bar( cx1, y, cx2, y, borderColor );
 
 					if( yLoc==MAX_WORLD_Y_LOC-1 || get_loc(xLoc, yLoc+1)->power_nation_recno!=nationRecno )
-						vga_back.bar( x, y+31, x+31, y+31, borderColor );
+						if( y+31 >= cy1 && y+31 <= cy2 )
+							vga_back.bar( cx1, y+31, cx2, y+31, borderColor );
 
 					if( xLoc==0 || get_loc(xLoc-1, yLoc)->power_nation_recno!=nationRecno )
-						vga_back.bar( x, y, x, y+31, borderColor );
+						if( x >= cx1 && x <= cx2 )
+							vga_back.bar( x, cy1, x, cy2, borderColor );
 
 					if( xLoc==MAX_WORLD_X_LOC-1 || get_loc(xLoc+1, yLoc)->power_nation_recno!=nationRecno )
-						vga_back.bar( x+31, y, x+31, y+31, borderColor );
+						if( x+31 >= cx1 && x+31 <= cx2 )
+							vga_back.bar( x+31, cy1, x+31, cy2, borderColor );
 				}
 
 				//--------- draw raw material icon ---------//
@@ -421,8 +558,10 @@ void ZoomMatrix::draw()
 				#ifdef DEBUG
 					if(debug2_enable_flag)
 					{
-						vga_back.bar( x, y, x+31, y, V_WHITE );
-						vga_back.bar( x, y, x, y+31, V_WHITE );
+						if( y >= cy1 && y <= cy2 )
+							vga_back.bar( cx1, y, cx2, y, V_WHITE );
+						if( x >= cx1 && x <= cx2 )
+							vga_back.bar( x, cy1, x, cy2, V_WHITE );
 
 						// display x, y location
 						if(!(xLoc%5) && !(yLoc%5))
@@ -798,8 +937,11 @@ void ZoomMatrix::draw_build_marker()
 
 	//----------------------------------------------//
 
-	int xLoc = (mouse.cur_x-ZOOM_X1)/ZOOM_LOC_WIDTH;
-	int yLoc = (mouse.cur_y-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+	// Relative tile under the cursor, but derived through the pixel origin so
+	// that it names the tile actually drawn there once the camera can sit
+	// part-way through a tile. Every top_x_loc+xLoc below stays correct.
+	int xLoc = (mouse.cur_x-ZOOM_X1+World::view_top_x)/ZOOM_LOC_WIDTH  - top_x_loc;
+	int yLoc = (mouse.cur_y-ZOOM_Y1+World::view_top_y)/ZOOM_LOC_HEIGHT - top_y_loc;
 	int locWidth, locHeight, validAction;
 	Location* locPtr = world.get_loc(top_x_loc+xLoc, top_y_loc+yLoc);
 
@@ -862,10 +1004,10 @@ void ZoomMatrix::draw_build_marker()
 
 	//---------- draw an highlight area -----------//
 
-	int x1 = ZOOM_X1 + xLoc * ZOOM_LOC_WIDTH;
-	int y1 = ZOOM_Y1 + yLoc * ZOOM_LOC_HEIGHT;
-	int x2 = ZOOM_X1 + (xLoc+locWidth)  * ZOOM_LOC_WIDTH -1;
-	int y2 = ZOOM_Y1 + (yLoc+locHeight) * ZOOM_LOC_HEIGHT-1;
+	int x1 = ZOOM_X1 + (top_x_loc+xLoc) * ZOOM_LOC_WIDTH  - World::view_top_x;
+	int y1 = ZOOM_Y1 + (top_y_loc+yLoc) * ZOOM_LOC_HEIGHT - World::view_top_y;
+	int x2 = ZOOM_X1 + (top_x_loc+xLoc+locWidth)  * ZOOM_LOC_WIDTH  - World::view_top_x -1;
+	int y2 = ZOOM_Y1 + (top_y_loc+yLoc+locHeight) * ZOOM_LOC_HEIGHT - World::view_top_y -1;
 
 	int pixelColor;
 
@@ -874,7 +1016,10 @@ void ZoomMatrix::draw_build_marker()
 	else
 		pixelColor = V_BLACK;
 
-	vga_back.pixelize( x1, y1, MIN(x2,ZOOM_X2), MIN(y2,ZOOM_Y2), pixelColor );
+	// x1/y1 need clamping now as well as x2/y2: the marked tile can start left
+	// of / above the window when the camera is part-way through a tile.
+	vga_back.pixelize( MAX(x1,ZOOM_X1), MAX(y1,ZOOM_Y1),
+							 MIN(x2,ZOOM_X2), MIN(y2,ZOOM_Y2), pixelColor );
 
 	//------- draw lines connected to towns and firms ---------//
 
@@ -1065,15 +1210,23 @@ void ZoomMatrix::blacken_unexplored()
 
 	int leftLoc = top_x_loc;
 	int topLoc = top_y_loc;
-	int rightLoc = leftLoc + disp_x_loc - 1;
-	int bottomLoc = topLoc + disp_y_loc - 1;
+	int rightLoc = leftLoc + disp_x_loc - 1 + (sub_x ? 1 : 0);
+	int bottomLoc = topLoc + disp_y_loc - 1 + (sub_y ? 1 : 0);
 	int scrnY, scrnX;		// screen coordinate
 	int x, y;				// x,y Location
 	Location *thisRowLoc, *northRowLoc, *southRowLoc;
 
-	scrnY = ZOOM_Y1;
+	if( rightLoc > max_x_loc-1 )
+		rightLoc = max_x_loc-1;
+	if( bottomLoc > max_y_loc-1 )
+		bottomLoc = max_y_loc-1;
+
+	scrnY = ZOOM_Y1 - sub_y;
 	for( y = topLoc; y <= bottomLoc; ++y, scrnY += ZOOM_LOC_HEIGHT)
 	{
+		int cy1 = MAX(scrnY, ZOOM_Y1);
+		int cy2 = MIN(scrnY+ZOOM_LOC_HEIGHT-1, ZOOM_Y2);
+
 		thisRowLoc = get_loc(leftLoc, y);
 		northRowLoc = y > 0 ? get_loc(leftLoc, y-1) : thisRowLoc;
 		southRowLoc = y+1 < max_y_loc ? get_loc(leftLoc, y+1): thisRowLoc;
@@ -1097,9 +1250,17 @@ void ZoomMatrix::blacken_unexplored()
 			southRow *= 3;
 		}
 
-		scrnX = ZOOM_X1;
+		scrnX = ZOOM_X1 - sub_x;
 		for( x = leftLoc; x <= rightLoc; ++x, scrnX += ZOOM_LOC_WIDTH )
 		{
+			// NOTE: the neighbour bitmasks below are shifted along as the loop
+			// advances, so the row pointers must keep stepping even for tiles
+			// that turn out to be off-screen. Cull at the draw call, not here.
+			int cx1 = MAX(scrnX, ZOOM_X1);
+			int cx2 = MIN(scrnX+ZOOM_LOC_WIDTH-1, ZOOM_X2);
+			int tileClipped = ( cx1 != scrnX || cy1 != scrnY ||
+									  cx2 != scrnX+ZOOM_LOC_WIDTH-1 || cy2 != scrnY+ZOOM_LOC_HEIGHT-1 );
+
 			if( x+1 < max_x_loc)
 			{
 				northRow = (northRow << 1) | ((++northRowLoc)->explored() ? 1 : 0);
@@ -1121,13 +1282,30 @@ void ZoomMatrix::blacken_unexplored()
 
 			// ---------- Draw mask to vgabuf --------//
 
+			if( cx1 > cx2 || cy1 > cy2 )		// wholly outside the zoom window
+				continue;
+
 			if( thisRow & 2)		// center square
 			{
-				explored_mask.draw(scrnX, scrnY, northRow, thisRow, southRow);
+				if( tileClipped )
+				{
+					tile_scratch_load(scrnX, scrnY, cx1, cy1, cx2, cy2);
+					explored_mask.draw_to(tile_scratch, ZOOM_LOC_WIDTH, 0, 0, northRow, thisRow, southRow);
+					tile_scratch_store(scrnX, scrnY, cx1, cy1, cx2, cy2);
+				}
+				else
+				{
+					explored_mask.draw(scrnX, scrnY, northRow, thisRow, southRow);
+				}
 			}
 			else
 			{
-				vga_back.black_32x32(scrnX, scrnY);
+				// black_32x32() is a plain fill, so an intersected bar() is an
+				// exact substitute and needs no scratch round-trip
+				if( tileClipped )
+					vga_back.bar(cx1, cy1, cx2, cy2, V_BLACK);
+				else
+					vga_back.black_32x32(scrnX, scrnY);
 			}
 		}
 	}
@@ -1141,25 +1319,43 @@ void ZoomMatrix::blacken_fog_of_war()
 {
 	int leftLoc = top_x_loc;
 	int topLoc = top_y_loc;
-	int rightLoc = leftLoc + disp_x_loc - 1;
-	int bottomLoc = topLoc + disp_y_loc - 1;
+	int rightLoc = leftLoc + disp_x_loc - 1 + (sub_x ? 1 : 0);
+	int bottomLoc = topLoc + disp_y_loc - 1 + (sub_y ? 1 : 0);
 	int scrnY, scrnX;		// screen coordinate
 	int x, y;				// x,y Location
 	Location *thisRowLoc, *northRowLoc, *southRowLoc;
 
+	if( rightLoc > max_x_loc-1 )
+		rightLoc = max_x_loc-1;
+	if( bottomLoc > max_y_loc-1 )
+		bottomLoc = max_y_loc-1;
+
 	if( config.fog_mask_method == 1)
 	{
 		// use fast method
-		scrnY = ZOOM_Y1;
+		scrnY = ZOOM_Y1 - sub_y;
 		for( y = topLoc; y <= bottomLoc; ++y, scrnY += ZOOM_LOC_HEIGHT)
 		{
+			int cy1 = MAX(scrnY, ZOOM_Y1);
+			int cy2 = MIN(scrnY+ZOOM_LOC_HEIGHT-1, ZOOM_Y2);
+
 			thisRowLoc = get_loc(leftLoc,y);
-			scrnX = ZOOM_X1;
+			scrnX = ZOOM_X1 - sub_x;
 			for( x = leftLoc; x <= rightLoc; ++x, scrnX += ZOOM_LOC_WIDTH, ++thisRowLoc )
 			{
+				int cx1 = MAX(scrnX, ZOOM_X1);
+				int cx2 = MIN(scrnX+ZOOM_LOC_WIDTH-1, ZOOM_X2);
+
+				if( cx1 > cx2 || cy1 > cy2 )
+					continue;
+
+				int tileClipped = ( cx1 != scrnX || cy1 != scrnY ||
+										  cx2 != scrnX+ZOOM_LOC_WIDTH-1 || cy2 != scrnY+ZOOM_LOC_HEIGHT-1 );
+
 				if( !thisRowLoc->explored() )
 				{
-					vga_back.bar(scrnX, scrnY, scrnX+ZOOM_LOC_WIDTH-1, scrnY+ZOOM_LOC_HEIGHT-1, 0);
+					// already a rectangle fill, so intersecting is exact
+					vga_back.bar(cx1, cy1, cx2, cy2, 0);
 				}
 				else
 				{
@@ -1167,8 +1363,16 @@ void ZoomMatrix::blacken_fog_of_war()
 					if( v < MAX_VISIT_LEVEL-7)
 					{
 						// more visible draw 1/4 tone
-						vga_back.pixelize_32x32(scrnX+1, scrnY, 0);
-						vga_back.pixelize_32x32(scrnX, scrnY+1, 0);
+						if( tileClipped )
+						{
+							pixelize_32x32_clip(scrnX, scrnY, 1, 0, 0, cx1, cy1, cx2, cy2);
+							pixelize_32x32_clip(scrnX, scrnY, 0, 1, 0, cx1, cy1, cx2, cy2);
+						}
+						else
+						{
+							vga_back.pixelize_32x32(scrnX+1, scrnY, 0);
+							vga_back.pixelize_32x32(scrnX, scrnY+1, 0);
+						}
 					}
 					// for visibility >= MAX_VISIT_LEVEL, draw nothing
 				}
@@ -1178,9 +1382,12 @@ void ZoomMatrix::blacken_fog_of_war()
 	else
 	{
 		// use slow method
-		scrnY = ZOOM_Y1;
+		scrnY = ZOOM_Y1 - sub_y;
 		for( y = topLoc; y <= bottomLoc; ++y, scrnY += ZOOM_LOC_HEIGHT)
 		{
+			int cy1 = MAX(scrnY, ZOOM_Y1);
+			int cy2 = MIN(scrnY+ZOOM_LOC_HEIGHT-1, ZOOM_Y2);
+
 			thisRowLoc = get_loc(leftLoc, y);
 			northRowLoc = y > 0 ? get_loc(leftLoc, y-1) : thisRowLoc;
 			southRowLoc = y+1 < max_y_loc ? get_loc(leftLoc, y+1): thisRowLoc;
@@ -1208,7 +1415,7 @@ void ZoomMatrix::blacken_fog_of_war()
 				southRow[1] = southRow[0];
 			}
 
-			scrnX = ZOOM_X1;
+			scrnX = ZOOM_X1 - sub_x;
 			for( x = leftLoc; x <= rightLoc; ++x, scrnX += ZOOM_LOC_WIDTH )
 			{
 				// shift to west
@@ -1242,8 +1449,26 @@ void ZoomMatrix::blacken_fog_of_war()
 					southRow[0] + southRow[1] + southRow[2] ) /8;
 				midThisRow[1] = MIN(thisRow[1], midMean );
 
-				vga_back.fog_remap(scrnX, scrnY, (char **)explored_mask.brightness_table->get_table_array(),
-					midNorthRow, midThisRow, midSouthRow);
+				int cx1 = MAX(scrnX, ZOOM_X1);
+				int cx2 = MIN(scrnX+ZOOM_LOC_WIDTH-1, ZOOM_X2);
+
+				if( cx1 > cx2 || cy1 > cy2 )
+					continue;
+
+				if( cx1 != scrnX || cy1 != scrnY ||
+					 cx2 != scrnX+ZOOM_LOC_WIDTH-1 || cy2 != scrnY+ZOOM_LOC_HEIGHT-1 )
+				{
+					tile_scratch_load(scrnX, scrnY, cx1, cy1, cx2, cy2);
+					IMGfogRemap32x32(tile_scratch, ZOOM_LOC_WIDTH, 0, 0,
+						(char **)explored_mask.brightness_table->get_table_array(),
+						midNorthRow, midThisRow, midSouthRow);
+					tile_scratch_store(scrnX, scrnY, cx1, cy1, cx2, cy2);
+				}
+				else
+				{
+					vga_back.fog_remap(scrnX, scrnY, (char **)explored_mask.brightness_table->get_table_array(),
+						midNorthRow, midThisRow, midSouthRow);
+				}
 			}
 		}
 	}
@@ -1902,12 +2127,61 @@ void ZoomMatrix::draw_objects_now(DynArray* unitArray, int displayLayer)
 //
 void ZoomMatrix::scroll(int xScroll, int yScroll)
 {
+	// A whole-tile jump lands on a tile boundary by definition, so drop any
+	// sub-tile offset left over from smooth scrolling rather than carrying it
+	// and leaving the view permanently offset from the tile grid.
+	sub_x = 0;
+	sub_y = 0;
+
 	Matrix::scroll(xScroll,yScroll);
 
 	world.map_matrix->cur_x_loc = top_x_loc;
 	world.map_matrix->cur_y_loc = top_y_loc;
 }
 //----------- End of function ZoomMatrix::scroll ------------//
+
+
+//---------- Begin of function ZoomMatrix::scroll_pixel ------------//
+//
+// Move the camera by a pixel delta rather than by a whole tile.
+//
+// <int> xPixel, yPixel - pixels to move (negative: left/up)
+//
+// The camera position is top_x_loc whole tiles plus sub_x pixels. Working in
+// a single absolute pixel value keeps the carry between the two exact, and
+// clamping that combined value is what stops the view sliding a partial tile
+// past the edge of the map -- which would otherwise walk the terrain loop off
+// the end of the Location array.
+//
+void ZoomMatrix::scroll_pixel(int xPixel, int yPixel)
+{
+	int maxPixelX = (max_x_loc - disp_x_loc) * ZOOM_LOC_WIDTH;
+	int maxPixelY = (max_y_loc - disp_y_loc) * ZOOM_LOC_HEIGHT;
+
+	int totalX = top_x_loc * ZOOM_LOC_WIDTH  + sub_x + xPixel;
+	int totalY = top_y_loc * ZOOM_LOC_HEIGHT + sub_y + yPixel;
+
+	if( totalX < 0 )
+		totalX = 0;
+	if( totalX > maxPixelX )
+		totalX = maxPixelX;
+
+	if( totalY < 0 )
+		totalY = 0;
+	if( totalY > maxPixelY )
+		totalY = maxPixelY;
+
+	// totalX/totalY are non-negative here, so / and % are the plain floor and
+	// remainder pair and need no sign correction.
+	top_x_loc = totalX / ZOOM_LOC_WIDTH;
+	sub_x     = totalX % ZOOM_LOC_WIDTH;
+	top_y_loc = totalY / ZOOM_LOC_HEIGHT;
+	sub_y     = totalY % ZOOM_LOC_HEIGHT;
+
+	world.map_matrix->cur_x_loc = top_x_loc;
+	world.map_matrix->cur_y_loc = top_y_loc;
+}
+//----------- End of function ZoomMatrix::scroll_pixel ------------//
 
 
 //------ Begin of function sort_display_function ------//

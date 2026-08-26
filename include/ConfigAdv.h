@@ -84,6 +84,9 @@ public:
 	// snap the map-scroll step period to a whole number of presented
 	// frames, so scroll steps land on an even cadence (see reset())
 	char			scroll_frame_align;
+	// scroll the camera by pixels rather than whole 32px tiles; supersedes
+	// scroll_frame_align, which only evens out discrete steps (see reset())
+	char			scroll_sub_pixel;
 
 	// town settings
 	int			town_ai_emerge_nation_pop_limit;
@@ -142,6 +145,9 @@ public:
 
 	// same, for scroll_frame_align
 	int			persist_scroll_frame_align();
+
+	// same, for scroll_sub_pixel
+	int			persist_scroll_sub_pixel();
 
 private:
 	void			update_check_sum(char *name, char *value);

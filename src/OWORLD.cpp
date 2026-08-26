@@ -57,6 +57,8 @@ World::World()
 {
 	loc_matrix = NULL;
 	next_scroll_time = 0;
+	last_scroll_time = 0;
+	scroll_accum = 0;
 	scan_fire_x = 0;
 	scan_fire_y = 0;
 	lightning_signal = 0;
@@ -317,6 +319,9 @@ int World::detect_scroll()
    if( mouse_cursor.frame_flag )    // if it's now in frame selection mode
       return 0;
 
+   if( config_adv.scroll_sub_pixel )
+      return detect_scroll_smooth(scroll_x, scroll_y);
+
    if( next_scroll_time && misc.get_time() < next_scroll_time )      // just scrolled not too long ago, wait for a little while before next scroll.
       return 0;
 
@@ -376,6 +381,103 @@ int World::detect_scroll()
 //----------- End of function World::detect_scroll -----------//
 
 
+//--------- Begin of function World::detect_scroll_smooth ---------//
+//
+// Sub-tile scrolling: move the camera by a pixel amount proportional to the
+// time since the last sample, instead of one whole 32px tile per timer tick.
+//
+// <int> scrollX, scrollY - whole-tile deltas from the wheel / touch gesture
+//
+// Returns 1 if the camera moved.
+//
+int World::detect_scroll_smooth(int scrollX, int scrollY)
+{
+   // A gap longer than this is a menu, a load or a pause, not a slow frame.
+   // Spending it would fling the camera the moment play resumes.
+   enum { MAX_SCROLL_GAP_MS = 250 };
+
+   uint32_t curTime = misc.get_time();
+   uint32_t elapsed = ( last_scroll_time && curTime > last_scroll_time )
+                        ? curTime - last_scroll_time : 0;
+   last_scroll_time = curTime;
+
+   if( elapsed > MAX_SCROLL_GAP_MS )
+      elapsed = 0;
+
+   int dx = 0, dy = 0;
+
+   if( scrollX || scrollY )
+   {
+      // The wheel and the two-finger gesture are inherently discrete and
+      // arrive already expressed in whole tiles; just restate them in pixels.
+      dx = scrollX * ZOOM_LOC_WIDTH;
+      dy = scrollY * ZOOM_LOC_HEIGHT;
+      scroll_accum = 0;
+   }
+   else
+   {
+      int dirX = 0, dirY = 0;
+
+      if( mouse.cur_x <= mouse.bound_x1 )
+         dirX = -1;
+      if( mouse.cur_x >= mouse.bound_x2 )
+         dirX = 1;
+      if( mouse.cur_y <= mouse.bound_y1 )
+         dirY = -1;
+      if( mouse.cur_y >= mouse.bound_y2 )
+         dirY = 1;
+
+      if( !dirX && !dirY )
+      {
+         scroll_accum = 0;       // not scrolling; drop the part-pixel credit
+         return 0;
+      }
+
+      // Same average speed as the legacy timer -- one tile per base period --
+      // so scroll_speed keeps meaning what it always meant. Deliberately the
+      // RAW period rather than scroll_period()'s frame-aligned one: rounding
+      // the period to a whole number of presented frames exists to even out
+      // discrete steps, and on this path there are no discrete steps left.
+      int basePeriod = 500/(config.scroll_speed+1);
+
+      if( basePeriod < 1 )
+         basePeriod = 1;
+
+      // Accumulated in pixel-milliseconds, so the fractional pixel left over
+      // each frame is carried rather than repeatedly rounded away -- without
+      // it, a frame shorter than one pixel's worth of time would scroll
+      // nothing at all and the camera would crawl.
+      scroll_accum += (int) elapsed * ZOOM_LOC_WIDTH;
+
+      int move = scroll_accum / basePeriod;
+      scroll_accum -= move * basePeriod;
+
+      if( !move )
+         return 0;
+
+      dx = dirX * move;
+      dy = dirY * move;
+   }
+
+   if( !dx && !dy )
+      return 0;
+
+   int oldTopX = zoom_matrix->top_x_loc;
+   int oldTopY = zoom_matrix->top_y_loc;
+
+   zoom_matrix->scroll_pixel(dx, dy);
+
+   // Only when a genuinely new tile row/column comes into view. Setting this
+   // every frame would ask disp_zoom() for a second full terrain draw on top
+   // of the one Matrix::disp() already does, doubling the cost of scrolling.
+   if( zoom_matrix->top_x_loc != oldTopX || zoom_matrix->top_y_loc != oldTopY )
+      sys.zoom_need_redraw = 1;
+
+   return 1;
+}
+//----------- End of function World::detect_scroll_smooth -----------//
+
+
 //--------- Begin of function World::scroll_period ---------//
 //
 // Milliseconds between one whole-tile scroll step and the next.
@@ -392,7 +494,7 @@ int World::detect_scroll()
 // Rounding the period to the nearest whole number of present intervals makes
 // every gap identical. The step size is unchanged (top_x_loc/top_y_loc are
 // whole tiles), so this evens out the cadence rather than removing the
-// per-step jump.
+// per-step jump; that is Phase 1f's separate sub-pixel work.
 //
 // Camera position is client-local -- it is saved, but it is not one of the
 // fields src/OMP_CRC.cpp puts into the multiplayer sync contract -- so this
@@ -420,6 +522,7 @@ int World::scroll_period()
    int intervals = (basePeriod + interval/2) / interval;
 
    // Never round down to a 0ms period and free-run the scroll.
+
    if( intervals < 1 )
       intervals = 1;
 
@@ -452,6 +555,10 @@ void World::go_loc(int xLoc, int yLoc, int selectFlag)
 
 	zoom_matrix->top_x_loc = map_matrix->cur_x_loc;
 	zoom_matrix->top_y_loc = map_matrix->cur_y_loc;
+
+	// going to a location lands on a tile boundary
+	zoom_matrix->sub_x = 0;
+	zoom_matrix->sub_y = 0;
 
 	sys.zoom_need_redraw = 1;
 
@@ -1353,11 +1460,11 @@ void World::draw_link_line(int srcFirmId, int srcTownRecno, int srcXLoc1,
 	int srcXLoc = (srcXLoc1 + srcXLoc2)/2;
 	int srcYLoc = (srcYLoc1 + srcYLoc2)/2;
 
-	int srcX = ( ZOOM_X1 + (srcXLoc1-zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (srcXLoc2-zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+	int srcX = ( ZOOM_X1 + srcXLoc1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (srcXLoc2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-	int srcY = ( ZOOM_Y1 + (srcYLoc1-zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (srcYLoc2-zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+	int srcY = ( ZOOM_Y1 + srcYLoc1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (srcYLoc2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 	//------- draw lines connected to town ---------//
 
@@ -1404,11 +1511,11 @@ void World::draw_link_line(int srcFirmId, int srcTownRecno, int srcXLoc1,
 
 			//---------- draw line now -----------//
 
-			townX = ( ZOOM_X1 + (townPtr->loc_x1-zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-					  + ZOOM_X1 + (townPtr->loc_x2-zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+			townX = ( ZOOM_X1 + townPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+					  + ZOOM_X1 + (townPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-			townY = ( ZOOM_Y1 + (townPtr->loc_y1-zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-					  + ZOOM_Y1 + (townPtr->loc_y2-zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+			townY = ( ZOOM_Y1 + townPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+					  + ZOOM_Y1 + (townPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 			anim_line.draw_line(&vga_back, srcX, srcY, townX, townY);
 		}
@@ -1464,11 +1571,11 @@ void World::draw_link_line(int srcFirmId, int srcTownRecno, int srcXLoc1,
 
 		//---------- draw line now -----------//
 
-		firmX = ( ZOOM_X1 + (firmPtr->loc_x1-zoom_matrix->top_x_loc) * ZOOM_LOC_WIDTH
-				  + ZOOM_X1 + (firmPtr->loc_x2-zoom_matrix->top_x_loc+1) * ZOOM_LOC_WIDTH ) / 2;
+		firmX = ( ZOOM_X1 + firmPtr->loc_x1 * ZOOM_LOC_WIDTH - World::view_top_x
+				  + ZOOM_X1 + (firmPtr->loc_x2+1) * ZOOM_LOC_WIDTH - World::view_top_x ) / 2;
 
-		firmY = ( ZOOM_Y1 + (firmPtr->loc_y1-zoom_matrix->top_y_loc) * ZOOM_LOC_HEIGHT
-				  + ZOOM_Y1 + (firmPtr->loc_y2-zoom_matrix->top_y_loc+1) * ZOOM_LOC_HEIGHT ) / 2;
+		firmY = ( ZOOM_Y1 + firmPtr->loc_y1 * ZOOM_LOC_HEIGHT - World::view_top_y
+				  + ZOOM_Y1 + (firmPtr->loc_y2+1) * ZOOM_LOC_HEIGHT - World::view_top_y ) / 2;
 
 		anim_line.draw_line(&vga_back, srcX, srcY, firmX, firmY);
 	}

@@ -973,8 +973,13 @@ void Sys::disp_zoom()
 	err_when(zoomMatrix->top_x_loc<0 || zoomMatrix->top_x_loc>=MAX_WORLD_X_LOC);
 	err_when(zoomMatrix->top_y_loc<0 || zoomMatrix->top_y_loc>=MAX_WORLD_Y_LOC);
 
-	World::view_top_x = zoomMatrix->top_x_loc * ZOOM_LOC_WIDTH;
-	World::view_top_y = zoomMatrix->top_y_loc * ZOOM_LOC_HEIGHT;
+	// The single pixel-space camera origin. Folding sub_x/sub_y in here is
+	// what lets the whole object layer -- units, firms, towns, walls, plants,
+	// rocks, hills, snow, flames, bullets, effects -- scroll at sub-tile
+	// granularity without touching any of its ~109 read sites: they already
+	// work in pixels and already clip at the view edges.
+	World::view_top_x = zoomMatrix->top_x_loc * ZOOM_LOC_WIDTH  + zoomMatrix->sub_x;
+	World::view_top_y = zoomMatrix->top_y_loc * ZOOM_LOC_HEIGHT + zoomMatrix->sub_y;
 
 	//--------- draw map area ---------//
 

@@ -134,6 +134,15 @@ public:
 	int	vibration; // reset on new game, save on save game
 	short	lightning_x1, lightning_y1, lightning_x2, lightning_y2; // save on save game
 
+	// Sub-tile scroll offset in pixels, always 0 <= sub_x < ZOOM_LOC_WIDTH.
+	// The camera's true position is top_x_loc whole tiles PLUS sub_x pixels;
+	// Sys::disp_zoom() folds both into World::view_top_x, which is the single
+	// pixel-space origin every draw site reads. Deliberately NOT saved:
+	// src/OGFILE2.cpp writes zoom matrix fields one at a time and restores
+	// the camera as a whole-tile position, so a save round-trip simply lands
+	// on a tile boundary with sub_x/sub_y back at 0.
+	int	sub_x, sub_y;
+
 public:
    ZoomMatrix();
 
@@ -141,6 +150,8 @@ public:
 	void draw();
 	void draw_frame();
 	void scroll(int,int);
+	// move the camera by a pixel delta, carrying into top_x_loc/top_y_loc
+	void scroll_pixel(int xPixel, int yPixel);
 	void draw_white_site();
 	void put_bitmap_clip(int x, int y, char* bitmapPtr,int compressedFlag=0);
 	void put_bitmap_remap_clip(int x, int y, char* bitmapPtr, char* colorRemapTable=NULL,int compressedFlag=0);

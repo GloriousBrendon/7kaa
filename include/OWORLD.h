@@ -65,6 +65,8 @@ public:
 	Location     *loc_matrix;
 
 	unsigned long	 		 next_scroll_time;		 // next scroll time
+	unsigned long	 		 last_scroll_time;		 // last smooth-scroll sample, for the elapsed-time delta
+	int				 		 scroll_accum;				 // sub-pixel scroll credit, in pixel-milliseconds
 
 	char			 scan_fire_x;				// cycle from 0 to SCAN_FIRE_DIST-1
 	char			 scan_fire_y;
@@ -200,6 +202,7 @@ public:
 
 private:
 	int	  	detect_scroll();
+	int		detect_scroll_smooth(int scrollX, int scrollY);
 	int		scroll_period();     // ms between whole-tile scroll steps
 	// int		detect_firm_town();
 

@@ -148,7 +148,10 @@ void Site::draw(int x, int y)
 		}
 	}
 
-	vga_back.put_bitmap_trans( x, y, bmpPtr );
+	// Routed through the zoom window's clipping blit rather than the raw one:
+	// with sub-tile scrolling the tile this icon sits on can straddle the
+	// window edge, and put_bitmap_trans() does no bounds checking.
+	world.zoom_matrix->put_bitmap_clip( x, y, bmpPtr );
 }
 //----------- End of function Site::draw -----------//
 

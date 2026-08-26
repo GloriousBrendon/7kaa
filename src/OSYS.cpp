@@ -3235,8 +3235,8 @@ static int get_mouse_loc_in_zoom_map(int &x, int &y)
    int mouseY = mouse.cur_y;
    if(mouseX >= ZOOM_X1 && mouseX <= ZOOM_X2 && mouseY >= ZOOM_Y1 && mouseY <= ZOOM_Y2)
    {
-      x = world.zoom_matrix->top_x_loc + (mouseX-ZOOM_X1)/ZOOM_LOC_WIDTH;
-      y = world.zoom_matrix->top_y_loc + (mouseY-ZOOM_Y1)/ZOOM_LOC_HEIGHT;
+      x = (mouseX-ZOOM_X1+World::view_top_x) / ZOOM_LOC_WIDTH;
+      y = (mouseY-ZOOM_Y1+World::view_top_y) / ZOOM_LOC_HEIGHT;
       return 1;
    }
 

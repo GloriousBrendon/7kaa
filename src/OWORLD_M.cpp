@@ -432,6 +432,10 @@ int MapMatrix::detect_area()
 		world.zoom_matrix->top_x_loc = cur_x_loc;
 		world.zoom_matrix->top_y_loc = cur_y_loc;
 
+		// jumping to a minimap position lands on a tile boundary
+		world.zoom_matrix->sub_x = 0;
+		world.zoom_matrix->sub_y = 0;
+
 		sys.zoom_need_redraw = 1;
 	}
 

@@ -81,7 +81,7 @@ static void disp_slide_bar(SlideBar *slideBar, int);
 #define IGOPTION_MAP_ID          0x00000400
 #define IGOPTION_SCALE_QUALITY   0x00000800
 #define IGOPTION_VSYNC           0x00001000
-#define IGOPTION_SCROLL_ALIGN    0x00002000
+#define IGOPTION_SCROLL_MODE     0x00002000
 #define IGOPTION_PAGE            0x40000000
 #define IGOPTION_ALL             0x7FFFFFFF
 
@@ -89,7 +89,7 @@ static void disp_slide_bar(SlideBar *slideBar, int);
 
 OptionMenu::OptionMenu() : help_group(3), news_group(2), report_group(2) ,
 	show_icon_group(2), show_path_group(4), scale_quality_group(3), vsync_group(2),
-	scroll_align_group(2)
+	scroll_mode_group(3)
 
 {
 	active_flag = 0;
@@ -216,22 +216,31 @@ void OptionMenu::enter(char untilExitFlag)
 		}
 	}
 
-	// --------- initialize scroll cadence button group ---------- //
+	// --------- initialize scroll mode button group ---------- //
 	//
 	// Sits in the clear band between the option boxes and the Return/Cancel
 	// buttons: x 415-722, y 498-522. The strip lower down and to the right of
-	// Cancel is not usable -- the decorative corner runs from x=723.
+	// Cancel is not usable -- the decorative corner runs from x=723, which a
+	// 3-button row would have overlapped.
+	//
+	// Three modes rather than two switches, because the two config flags are
+	// not independent in practice: sub-pixel scrolling has no discrete steps
+	// for frame alignment to even out, so "smooth + even" and "smooth + jump"
+	// are the same thing. Ordered best-to-most-legacy.
+	//   Smooth - scroll_sub_pixel
+	//   Even   - whole tiles, period snapped to whole presented frames
+	//   Jump   - the original 500/(scroll_speed+1) timer
 
 	{
-		const char* scroll_align_label[2] = { _("On"), _("Off") };
+		const char* scroll_mode_label[3] = { _("Smooth"), _("Even"), _("Jump") };
 		const int bx1 = 512, by1 = 499, bw = 68, bh = 21, gap = 2;
 
-		for( i = 0; i < 2; ++i )
+		for( i = 0; i < 3; ++i )
 		{
-			scroll_align_group[i].create( bx1+i*(bw+gap), by1,
+			scroll_mode_group[i].create( bx1+i*(bw+gap), by1,
 				bx1+i*(bw+gap)+bw-1, by1+bh-1,
 				ButtonCustom::disp_text_button_func,
-				ButtonCustomPara((void*)scroll_align_label[i], 1-i), 0, 0 );
+				ButtonCustomPara((void*)scroll_mode_label[i], 2-i), 0, 0 );
 		}
 	}
 
@@ -242,7 +251,8 @@ void OptionMenu::enter(char untilExitFlag)
 	vsync_changed = 0;
 
 	old_scroll_frame_align = config_adv.scroll_frame_align;
-	scroll_frame_align_changed = 0;
+	old_scroll_sub_pixel = config_adv.scroll_sub_pixel;
+	scroll_mode_changed = 0;
 
 	// --------- other buttons --------//
 	start_button.create(200, 520, "RETURN-U", "RETURN-D", 1, 0);
@@ -289,7 +299,7 @@ void OptionMenu::disp(int needRepaint)
 			vga.use_back();
 			font_san.put(572, 358, _("Scale Filter"));
 			font_san.put(572, 458, _("V-Sync"));
-			font_san.put(420, 503, _("Even Scrolling"));
+			font_san.put(420, 503, _("Scrolling"));
 			vga.use_front();
 
 			vga_util.blt_buf(0,0,VGA_WIDTH-1,VGA_HEIGHT-1,0);
@@ -356,10 +366,12 @@ void OptionMenu::disp(int needRepaint)
 			// index is the complement -- same idiom as show_icon_group above
 			vsync_group.paint(1 - config_adv.vga_vsync);
 		}
-		if( refresh_flag & IGOPTION_SCROLL_ALIGN )
+		if( refresh_flag & IGOPTION_SCROLL_MODE )
 		{
-			// { On, Off } with values { 1, 0 }; paint() takes an INDEX
-			scroll_align_group.paint(1 - config_adv.scroll_frame_align);
+			// paint() takes a button INDEX, and the group is ordered
+			// { Smooth, Even, Jump } with values { 2, 1, 0 }
+			scroll_mode_group.paint( config_adv.scroll_sub_pixel ? 0
+										  : (config_adv.scroll_frame_align ? 1 : 2) );
 		}
 
 		refresh_flag = 0;
@@ -475,12 +487,21 @@ int OptionMenu::detect()
 		vga.set_vsync( (char) vsync_group[vsync_group()].custom_para.value );
 		vsync_changed = 1;
 	}
-	else if( scroll_align_group.detect() >= 0)
+	else if( scroll_mode_group.detect() >= 0)
 	{
-		// read fresh by World::scroll_period() on the next scroll step, so
-		// there is nothing to apply here beyond storing the preference
-		config_adv.scroll_frame_align = (char) scroll_align_group[scroll_align_group()].custom_para.value;
-		scroll_frame_align_changed = 1;
+		// Both flags are read fresh on the next scroll, so there is nothing to
+		// apply here beyond storing the preference. Smooth leaves the
+		// alignment flag alone: it is unused while sub-pixel is on, and
+		// preserving it means switching Smooth -> Even returns the player to
+		// whichever whole-tile behaviour they had before.
+		int mode = scroll_mode_group[scroll_mode_group()].custom_para.value;
+
+		config_adv.scroll_sub_pixel = (mode == 2);
+
+		if( mode != 2 )
+			config_adv.scroll_frame_align = (mode == 1);
+
+		scroll_mode_changed = 1;
 	}
 	else if( start_button.detect(KEY_RETURN) )
 	{
@@ -505,8 +526,11 @@ int OptionMenu::detect()
 		if( vsync_changed )
 			config_adv.persist_vga_vsync();
 
-		if( scroll_frame_align_changed )
+		if( scroll_mode_changed )
+		{
 			config_adv.persist_scroll_frame_align();
+			config_adv.persist_scroll_sub_pixel();
+		}
 	}
 	else if( cancel_button.detect(KEY_ESC) )
 	{
@@ -518,8 +542,11 @@ int OptionMenu::detect()
 		if( vsync_changed )
 			vga.set_vsync(old_vsync);
 
-		if( scroll_frame_align_changed )
+		if( scroll_mode_changed )
+		{
 			config_adv.scroll_frame_align = old_scroll_frame_align;
+			config_adv.scroll_sub_pixel = old_scroll_sub_pixel;
+		}
 
 		exit(0);
 	}
