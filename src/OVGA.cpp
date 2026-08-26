@@ -53,6 +53,14 @@ static void init_window_size();
 // this build supports back to 2.0.4).
 #define PRESENT_INTERVAL_RECHECK_MS 1000
 
+//------ Define the runtime buffer size ---------//
+
+// Defaults to the legacy fixed resolution; Vga::init() is what may widen it.
+// Statically initialised because VgaBuf and MouseCursor globals are
+// constructed before any of our init code runs.
+int vga_buf_width  = VGA_LEGACY_WIDTH;
+int vga_buf_height = VGA_LEGACY_HEIGHT;
+
 //------ Define static class member vars ---------//
 
 char    Vga::use_back_buf = 0;

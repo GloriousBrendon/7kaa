@@ -147,10 +147,10 @@ public:
 	int	frame_origin_x, frame_origin_y;
 	int	frame_border_x1, frame_border_y1, frame_border_x2, frame_border_y2;
 
-	char  frame_top_save_scr[VGA_WIDTH+4];		// for saving the nation selection frame
-	char  frame_bottom_save_scr[VGA_WIDTH+4];	// +4 is for the width & height info
-	char  frame_left_save_scr[VGA_HEIGHT+4];
-	char  frame_right_save_scr[VGA_HEIGHT+4];
+	char  frame_top_save_scr[VGA_MAX_WIDTH+4];		// for saving the nation selection frame
+	char  frame_bottom_save_scr[VGA_MAX_WIDTH+4];	// +4 is for the width & height info
+	char  frame_left_save_scr[VGA_MAX_HEIGHT+4];
+	char  frame_right_save_scr[VGA_MAX_HEIGHT+4];
 
 	//------- cursor bitmap resource --------//
 

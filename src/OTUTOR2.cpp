@@ -48,10 +48,13 @@
 static void disp_scroll_bar_func(SlideVBar *scroll, int);
 
 
+// Legacy 800x600 screen: the widget coordinates below (SCROLL_X1 = 757 and
+// friends) are hardcoded against it, so it stays in that space rather than
+// following the runtime buffer size.
 enum { TUTOR_MENU_X1 = 0,
 		 TUTOR_MENU_Y1 = 0,
-		 TUTOR_MENU_WIDTH = VGA_WIDTH,
-		 TUTOR_MENU_HEIGHT = VGA_HEIGHT };
+		 TUTOR_MENU_WIDTH = VGA_LEGACY_WIDTH,
+		 TUTOR_MENU_HEIGHT = VGA_LEGACY_HEIGHT };
 
 enum { SCROLL_X1 = 757,
 		 SCROLL_Y1 = 309,

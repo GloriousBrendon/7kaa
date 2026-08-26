@@ -31,8 +31,26 @@
 
 //----------- define constants ----------//
 
-#define VGA_WIDTH             800
-#define VGA_HEIGHT            600
+// The 1997 UI positions every widget, dialog and report against a fixed
+// 800x600 coordinate space. That space is still the layout authority -- see
+// VGA_LEGACY_WIDTH/HEIGHT -- but the buffer actually rendered into is now
+// sized at runtime, so the map viewport can cover more tiles at native
+// sprite scale instead of magnifying the same 800x600 image.
+#define VGA_LEGACY_WIDTH      800
+#define VGA_LEGACY_HEIGHT     600
+
+// Upper bound on the runtime buffer. Only exists to size the handful of
+// fixed-extent scratch arrays that used to be declared as [VGA_WIDTH+4];
+// it is not a supported-resolution list.
+#define VGA_MAX_WIDTH        3840
+#define VGA_MAX_HEIGHT       2160
+
+// Live buffer size. Always VGA_LEGACY_* unless the wide-viewport mode is on.
+extern int vga_buf_width;
+extern int vga_buf_height;
+
+#define VGA_WIDTH             vga_buf_width
+#define VGA_HEIGHT            vga_buf_height
 #define VGA_BPP                 8
 #define VGA_PALETTE_SIZE      256
 
