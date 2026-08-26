@@ -51,6 +51,12 @@
 short World::view_top_x, World::view_top_y;
 int   World::max_x_loc=200, World::max_y_loc=200;
 
+// Live map-viewport rect (see include/OWORLDMT.h). Statically initialised to
+// the legacy 576x544 window; Sys::init_layout() is what may widen it.
+int zoom_win_x1 = ZOOM_LEGACY_X1, zoom_win_y1 = ZOOM_LEGACY_Y1;
+int zoom_win_x2 = ZOOM_LEGACY_X2, zoom_win_y2 = ZOOM_LEGACY_Y2;
+int zoom_win_width = ZOOM_LEGACY_WIDTH, zoom_win_height = ZOOM_LEGACY_HEIGHT;
+
 //----------- Begin of function World::World ----------//
 
 World::World()

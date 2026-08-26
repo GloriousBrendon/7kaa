@@ -57,9 +57,9 @@
 
 //---------- define coordinations ------------//
 
-enum { TUTOR_X1 = ZOOM_X1,
-		 TUTOR_Y1 = ZOOM_Y1,
-		 TUTOR_X2 = ZOOM_X2,
+enum { TUTOR_X1 = ZOOM_LEGACY_X1,
+		 TUTOR_Y1 = ZOOM_LEGACY_Y1,
+		 TUTOR_X2 = ZOOM_LEGACY_X2,
 		 TUTOR_Y2 = TUTOR_Y1+120
 	  };
 

@@ -37,16 +37,16 @@
 
 //------------- Define coordinations -----------//
 
-enum { INCOME_BROWSE_X1 = ZOOM_X1+6,
-		 INCOME_BROWSE_Y1 = ZOOM_Y1+6,
-		 INCOME_BROWSE_X2 = ZOOM_X2-6,
+enum { INCOME_BROWSE_X1 = ZOOM_LEGACY_X1+6,
+		 INCOME_BROWSE_Y1 = ZOOM_LEGACY_Y1+6,
+		 INCOME_BROWSE_X2 = ZOOM_LEGACY_X2-6,
 		 INCOME_BROWSE_Y2 = INCOME_BROWSE_Y1+186
 	  };
 
-enum { EXPENSE_BROWSE_X1 = ZOOM_X1+6,
+enum { EXPENSE_BROWSE_X1 = ZOOM_LEGACY_X1+6,
 		 EXPENSE_BROWSE_Y1 = INCOME_BROWSE_Y2+6,
-		 EXPENSE_BROWSE_X2 = ZOOM_X2-6,
-		 EXPENSE_BROWSE_Y2 = ZOOM_Y2-30,
+		 EXPENSE_BROWSE_X2 = ZOOM_LEGACY_X2-6,
+		 EXPENSE_BROWSE_Y2 = ZOOM_LEGACY_Y2-30,
 	  };
 
 //----------- Define static variables ----------//
@@ -182,7 +182,7 @@ static void disp_total()
 
 	y=EXPENSE_BROWSE_Y2+7;
 
-	vga_back.d3_panel_up(EXPENSE_BROWSE_X1, EXPENSE_BROWSE_Y2+4, EXPENSE_BROWSE_X2, ZOOM_Y2-6 );
+	vga_back.d3_panel_up(EXPENSE_BROWSE_X1, EXPENSE_BROWSE_Y2+4, EXPENSE_BROWSE_X2, ZOOM_LEGACY_Y2-6 );
 
 	font_san.put( x, y, _("Yearly Balance") );
 	font_san.put( x+370, y, misc.format( (int)(totalIncome-totalExpense), 2 ) );

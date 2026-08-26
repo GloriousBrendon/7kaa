@@ -58,13 +58,36 @@
 
 //----------- Zoom window -------------//
 
-#define ZOOM_X1           0     // World Zoom Window
-#define ZOOM_Y1          56
-#define ZOOM_X2         575
-#define ZOOM_Y2         599
+// The historical World Zoom Window: 576x544 = 18x17 tiles, with the HUD
+// chrome occupying the top strip (y < 56) and the right sidebar (x > 575).
+//
+// Report and dialog screens draw *inside* this rect and lay themselves out
+// with enum tables derived from it (see e.g. OR_TRADE.cpp's
+// CARAVAN_BROWSE_X1), so they need it to stay a compile-time constant.
+// They keep these ZOOM_LEGACY_* values and therefore keep their exact 1997
+// layout no matter how large the buffer gets.
+#define ZOOM_LEGACY_X1       0
+#define ZOOM_LEGACY_Y1      56
+#define ZOOM_LEGACY_X2     575
+#define ZOOM_LEGACY_Y2     599
 
-#define ZOOM_WIDTH      576     // ZOOM_LOC_WIDTH(32)  * 18 = 576
-#define ZOOM_HEIGHT     544     // ZOOM_LOC_HEIGHT(32) * 17 = 544
+#define ZOOM_LEGACY_WIDTH   576
+#define ZOOM_LEGACY_HEIGHT  544
+
+// The live map viewport. Sprite drawing, clipping and mouse picking all use
+// these; they grow to fill whatever the buffer leaves between the docked HUD
+// chrome, which is what puts more tiles on screen at native sprite scale.
+// Always the ZOOM_LEGACY_* values unless the wide-viewport mode is on.
+extern int zoom_win_x1, zoom_win_y1, zoom_win_x2, zoom_win_y2;
+extern int zoom_win_width, zoom_win_height;
+
+#define ZOOM_X1         zoom_win_x1     // World Zoom Window
+#define ZOOM_Y1         zoom_win_y1
+#define ZOOM_X2         zoom_win_x2
+#define ZOOM_Y2         zoom_win_y2
+
+#define ZOOM_WIDTH      zoom_win_width  // ZOOM_LOC_WIDTH(32)  * 18 = 576 legacy
+#define ZOOM_HEIGHT     zoom_win_height // ZOOM_LOC_HEIGHT(32) * 17 = 544 legacy
 
 #define ZOOM_LOC_HEIGHT  32     // in world zoom window
 #define ZOOM_LOC_WIDTH   32

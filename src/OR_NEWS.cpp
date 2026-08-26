@@ -35,10 +35,10 @@
 
 //------------- Define coordinations -----------//
 
-enum { NEWS_BROWSE_X1 = ZOOM_X1+6,
-		 NEWS_BROWSE_Y1 = ZOOM_Y1+6,
-		 NEWS_BROWSE_X2 = ZOOM_X2-6,
-		 NEWS_BROWSE_Y2 = ZOOM_Y2-25,
+enum { NEWS_BROWSE_X1 = ZOOM_LEGACY_X1+6,
+		 NEWS_BROWSE_Y1 = ZOOM_LEGACY_Y1+6,
+		 NEWS_BROWSE_X2 = ZOOM_LEGACY_X2-6,
+		 NEWS_BROWSE_Y2 = ZOOM_LEGACY_Y2-25,
 	  };
 
 //----------- Define static variables ----------//
@@ -71,7 +71,7 @@ void Info::disp_news_log(int refreshFlag)
 
 	//------- display button ---------//
 
-	image_icon.put_back(ZOOM_X2-20, ZOOM_Y2-18, "NEWS_LOG");	// news log report
+	image_icon.put_back(ZOOM_LEGACY_X2-20, ZOOM_LEGACY_Y2-18, "NEWS_LOG");	// news log report
 }
 //----------- End of function Info::disp_news_log -----------//
 
@@ -85,7 +85,7 @@ void Info::detect_news_log()
 
 	//--------- detect button --------//
 
-	if( mouse.single_click( ZOOM_X2-20, ZOOM_Y2-18, ZOOM_X2-11, ZOOM_Y2-9 ) )
+	if( mouse.single_click( ZOOM_LEGACY_X2-20, ZOOM_LEGACY_Y2-18, ZOOM_LEGACY_X2-11, ZOOM_LEGACY_Y2-9 ) )
 		sys.set_view_mode(MODE_NORMAL);
 }
 //----------- End of function Info::detect_news_log -----------//
