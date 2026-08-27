@@ -378,6 +378,15 @@ void ZoomMatrix::draw()
 	Location* locPtr;
 	char*     nationColorArray = nation_array.nation_power_color_array;
 
+	// A saved camera position is restored verbatim by World::read_file() with
+	// no range check, and it was valid for whatever viewport the game was
+	// saved at. Loading a save made at a smaller viewport therefore starts
+	// with top_x_loc/top_y_loc too far into the map for the current one, which
+	// would leave the far edge of the view unpainted until the player happened
+	// to scroll (Matrix::scroll() being the only other caller of this). Clamp
+	// before drawing so the first frame after a load is already correct.
+	valid_disp_area();
+
 	// With a sub-tile offset the first tile is only partly on screen, so one
 	// extra column/row is needed to fill the gap it leaves at the far edge.
 	// Clamped to the map bounds: scroll_pixel() already refuses to put the
