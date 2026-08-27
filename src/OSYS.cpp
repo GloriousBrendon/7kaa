@@ -280,6 +280,11 @@ int Sys::init_directx()
       return 0;
    DEBUG_LOG("vga.init() ok");
 
+   // vga.init() is what decides the buffer size and therefore the HUD layout;
+   // the zoom and mini map matrices were constructed with the legacy one
+   // before main() ran, so re-point them now.
+   world.init_layout();
+
    DEBUG_LOG("Attempt vga.load_pal()");
    vga.load_pal(DIR_RES"PAL_STD.RES");
    DEBUG_LOG("vga.load_pal() finish");
@@ -798,6 +803,7 @@ void Sys::main_loop(int isLoadedGame)
       harnessStartDate = info.game_date;
       harnessWallStartTime = misc.get_time();
    }
+
 
    in_main_loop = 1;
 

@@ -104,6 +104,11 @@ private:
 	int boundary_set;
 	char vsync_active;   // vsync the driver actually granted, not what was asked for
 	int present_interval_ms;   // flip() throttle, derived from the display's refresh rate
+	int screenshot_frames_left;   // -headless-screenshot countdown, 0 = disabled
+	// 1 while a legacy 800x600 full-screen screen (menu, report, encyclopedia)
+	// is what's on the buffer, so only that corner is presented. See
+	// set_legacy_present().
+	char present_legacy;
 
 public:
 	ColorTable*    vga_color_table;
@@ -147,11 +152,17 @@ public:
 	int    set_vsync(char enable);
 	char   is_vsync_granted();
 	char   is_vsync_active()  { return vsync_active; }
+	void   set_legacy_present(int on);
+	// Size of the region flip() actually presents -- the whole buffer during
+	// gameplay, the legacy 800x600 corner while a full-screen menu is up.
+	int    present_width()   { return present_legacy ? VGA_LEGACY_WIDTH  : VGA_WIDTH;  }
+	int    present_height()  { return present_legacy ? VGA_LEGACY_HEIGHT : VGA_HEIGHT; }
 	void   update_present_interval();
 	// ms between presents that flip() is currently throttling to; 0 when
 	// there is nothing to throttle (see update_present_interval())
 	int    present_interval()  { return present_interval_ms; }
 	void   flip();
+	int    save_screenshot(const char* filePath);
 	void   save_status_report();
 
 private:
@@ -159,6 +170,11 @@ private:
 };
 
 extern Vga vga;
+
+// Whether the render buffer is larger than the legacy 800x600, i.e. whether
+// the HUD chrome has to be docked to the buffer edges and the gap it leaves
+// filled in. Defined in OVGA.cpp.
+int vga_is_wide_viewport();
 
 //--------------------------------------------//
 

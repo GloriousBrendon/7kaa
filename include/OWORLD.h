@@ -85,6 +85,7 @@ public:
 
 	void 		init();
 	void 		deinit();
+	void		init_layout();
 
 	void 		generate_map();
 	void 		assign_map();

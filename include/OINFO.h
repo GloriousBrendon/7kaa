@@ -194,6 +194,7 @@ public:
 	void	init_random_seed(int randomSeed);
 
 	void 	disp_panel();
+	void 	disp_panel_docked();
 
 	void	disp();
 	void	update();

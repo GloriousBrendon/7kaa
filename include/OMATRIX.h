@@ -325,6 +325,7 @@ public:
    virtual ~Matrix();
 
    void init(int,int,int,int,int,int,int,int,int);
+   void set_win_rect(int winX1,int winY1,int winX2,int winY2,int areaWidth,int areaHeight);
    void assign_map(Matrix*);
    void assign_map(Location*,int,int);
 

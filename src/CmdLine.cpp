@@ -31,6 +31,7 @@ CmdLine::CmdLine()
 {
 	enable_audio = 1;
 	enable_if = 1;
+	screenshot_path = NULL;
 	rnd = 0;
 	game_speed = -1;
 	startup_mode = STARTUP_NORMAL;
@@ -90,6 +91,10 @@ int CmdLine::init(int argc, char **argv)
 	const char *speedOption = "-speed";
 	const char *windowOption = "-win";
 	const char *harnessDaysOption = "-headless-test-days";
+	// Companion to the above for layout review: renders the test scenario and
+	// writes the frame to a BMP so the HUD layout can be inspected at a given
+	// buffer size without a display attached.
+	const char *screenshotOption = "-headless-screenshot";
 	for( int i = 1; i < argc; i++ )
 	{
 		if( !strcmp(argv[i], lobbyJoinOption) )
@@ -113,6 +118,12 @@ int CmdLine::init(int argc, char **argv)
 		else if( !strcmp(argv[i], demoOption) )
 		{
 			set_startup_mode(STARTUP_DEMO);
+		}
+		else if( !strcmp(argv[i], screenshotOption) )
+		{
+			if( !have_arg(i, argc, screenshotOption) )
+				return 0;
+			screenshot_path = argv[++i];
 		}
 		else if( !strcmp(argv[i], noAudioOption) )
 		{

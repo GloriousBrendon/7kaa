@@ -535,6 +535,11 @@ void Sys::disp_frame()
 	}
 	else
 	{
+		// Gameplay is on the buffer, so present all of it -- unconditionally
+		// every frame rather than only on a redraw, so that no path back from
+		// a menu can leave the presentation stuck on the legacy corner.
+		vga.set_legacy_present(0);
+
 		// -------- re-draw the whole screen if needed, such as after task switching ---------//
 
 		if( need_redraw_flag )

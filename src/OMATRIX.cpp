@@ -112,6 +112,43 @@ Matrix::~Matrix()
 //------------- End of function Matrix::~Matrix -----------//
 
 
+//-------- Begin of function Matrix::set_win_rect ---------//
+//
+// Re-point the matrix at a new window rect.
+//
+// The zoom and mini map matrices are constructed from `world`, a global, so
+// their constructors run before the render buffer size is known and they
+// always start out with the legacy layout. This applies the real one once
+// Vga::init() has computed it. Everything else about the matrix -- the map
+// it is assigned, the current view position, the tile size -- is left alone.
+//
+void Matrix::set_win_rect(int winX1, int winY1, int winX2, int winY2,
+								  int areaWidth, int areaHeight)
+{
+	win_x1 = winX1;
+	win_y1 = winY1;
+	win_x2 = winX2;
+	win_y2 = winY2;
+
+	image_width  = areaWidth;
+	image_height = areaHeight;
+
+	image_x1 = win_x1;
+	image_y1 = win_y1;
+	image_x2 = image_x1+image_width-1;
+	image_y2 = image_y1+image_height-1;
+
+	//--- the saved-background buffer is sized from the image area ---//
+
+	if( save_image_buf )
+	{
+		mem_del( save_image_buf );
+		save_image_buf = mem_add( sizeof(short)*2 + image_width * image_height );
+	}
+}
+//---------- End of function Matrix::set_win_rect ---------//
+
+
 //----------- Begin of function Matrix::assign_map -----------//
 //
 // Instead of loading the map file, we can assign a pre-loaded

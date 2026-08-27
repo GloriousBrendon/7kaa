@@ -82,6 +82,26 @@ World::World()
 //------------- End of function World::World -----------//
 
 
+//--------- Begin of function World::init_layout ---------//
+//
+// Apply the runtime HUD layout to the two matrices.
+//
+// `world` is a global, so both matrices are constructed before Vga::init()
+// has worked out how big the buffer is, and start life with the legacy
+// 800x600 rects. Called once from Sys::init_directx() right after vga.init().
+// A no-op in legacy mode, where the runtime values equal the ctor ones.
+//
+void World::init_layout()
+{
+	zoom_matrix->set_win_rect( ZOOM_X1, ZOOM_Y1, ZOOM_X2, ZOOM_Y2,
+										ZOOM_WIDTH, ZOOM_HEIGHT );
+
+	map_matrix->set_win_rect( MAP_X1, MAP_Y1, MAP_X2, MAP_Y2,
+									  MAP_WIDTH, MAP_HEIGHT );
+}
+//---------- End of function World::init_layout ----------//
+
+
 //----------- Begin of function World::~World ----------//
 
 World::~World()

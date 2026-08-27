@@ -476,6 +476,13 @@ void ConfigAdv::reset()
 	// vsync demonstrably blocks.
 	vga_vsync = 0;
 
+	// Off by default: the wide viewport shows the player substantially more of
+	// the map at once, which is a balance-relevant change (AI reaction to what
+	// the player can see, scouting pressure) as much as a rendering one. It
+	// stays opt-in until play-testing says otherwise, per the project rule
+	// about flipping legacy defaults in a separate change.
+	vga_wide_viewport = 0;
+
 	vga_window_width = 0;
 	vga_window_height = 0;
 
@@ -740,6 +747,11 @@ int ConfigAdv::set(char *name, char *value)
 	else if( !strcmp(name, "vga_vsync") )
 	{
 		if( !read_bool(value, &vga_vsync) )
+			return 0;
+	}
+	else if( !strcmp(name, "vga_wide_viewport") )
+	{
+		if( !read_bool(value, &vga_wide_viewport) )
 			return 0;
 	}
 	else if( !strcmp(name, "vga_window_height") )

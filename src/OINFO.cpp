@@ -261,11 +261,109 @@ void Info::next_day()
 //---------- End of function Info::next_day --------//
 
 
+//-------- Begin of function Info::disp_panel_docked --------//
+//
+// Lay out the HUD chrome on a buffer wider and/or taller than 800x600.
+//
+// MAINSCR is a single baked 800x600 bitmap covering the whole 1997 screen. On
+// a larger buffer it is cut into the two pieces that actually carry the HUD
+// and each is docked to the edge it belongs to, rather than the whole thing
+// being stretched -- which is what keeps every widget at native pixel size:
+//
+//   top strip   (0,0)-(575,55)    stays top-left, where its baked-in menu
+//                                 buttons and the date/food/cash readouts
+//                                 are positioned
+//   sidebar     (576,0)-(799,599) moves right so its right edge lands on the
+//                                 buffer's right edge; keeps its internal y
+//                                 layout, so the minimap stays at the top
+//
+// Everything neither piece covers -- the run of top bar between them, the
+// column under the sidebar on a tall buffer, and any sub-tile remainder
+// beside or below the map viewport -- is tiled with the panel texture taken
+// from MAINSCR's own blank info-panel area, so the chrome reads as one
+// continuous surface instead of a flat fill. The whole buffer is tiled first
+// and the two pieces stamped over it; the map viewport is then painted over
+// by world.paint() as usual.
+//
+void Info::disp_panel_docked()
+{
+	//--- read MAINSCR into a buffer its own size, then cut it up ---//
+
+	VgaBuf chromeBuf;
+
+	chromeBuf.init( 0, VGA_LEGACY_WIDTH, VGA_LEGACY_HEIGHT );
+	if( !chromeBuf.surface )		// init() has already reported the failure
+	{
+		vga_back.d3_panel_up( 0, 0, VGA_WIDTH-1, VGA_HEIGHT-1 );
+		return;
+	}
+
+	chromeBuf.lock_buf();
+	image_interface.put_to_buf( &chromeBuf, "MAINSCR" );
+
+	int stripHeight  = ZOOM_LEGACY_Y1;                    // 56
+	int sidebarX1    = ZOOM_LEGACY_X2 + 1;                // 576, inside MAINSCR
+	int sidebarWidth = VGA_LEGACY_WIDTH - sidebarX1;      // 224
+	int sidebarDestX1 = sidebarX1 + hud_sidebar_x_offset; // docked right
+
+	//--- tile the blank part of the info panel over the whole buffer ---//
+	//
+	// MAINSCR's info-panel area is a flat run of the panel texture with no
+	// widgets baked into it, which makes it the one patch large enough to
+	// tile from. Coordinates are MAINSCR's own, so they are the legacy
+	// INFO_X1/Y1..INFO_X2/Y2 values without the docking offset.
+
+	enum { PATCH_X1 = 586, PATCH_Y1 = 265, PATCH_X2 = 790, PATCH_Y2 = 589 };
+
+	int patchWidth  = PATCH_X2 - PATCH_X1 + 1;
+	int patchHeight = PATCH_Y2 - PATCH_Y1 + 1;
+
+	char* patchBuf = mem_add( sizeof(short)*2 + patchWidth * patchHeight );
+	chromeBuf.read_bitmap( PATCH_X1, PATCH_Y1, PATCH_X2, PATCH_Y2, patchBuf );
+
+	for( int ty = 0; ty < VGA_HEIGHT; ty += patchHeight )
+	{
+		int srcY2 = MIN( patchHeight, VGA_HEIGHT - ty ) - 1;
+
+		for( int tx = 0; tx < VGA_WIDTH; tx += patchWidth )
+		{
+			int srcX2 = MIN( patchWidth, VGA_WIDTH - tx ) - 1;
+
+			vga_back.put_bitmap_area( tx, ty, patchBuf, 0, 0, srcX2, srcY2 );
+		}
+	}
+
+	mem_del( patchBuf );
+
+	//--- stamp the two chrome pieces over the tiled fill ---//
+
+	char* pieceBuf = mem_add( sizeof(short)*2 +
+		MAX( ZOOM_LEGACY_WIDTH * stripHeight,
+			  sidebarWidth * VGA_LEGACY_HEIGHT ) );
+
+	chromeBuf.read_bitmap( 0, 0, ZOOM_LEGACY_X2, stripHeight-1, pieceBuf );
+	vga_back.put_bitmap( 0, 0, pieceBuf );
+
+	chromeBuf.read_bitmap( sidebarX1, 0,
+								  VGA_LEGACY_WIDTH-1, VGA_LEGACY_HEIGHT-1, pieceBuf );
+	vga_back.put_bitmap( sidebarDestX1, 0, pieceBuf );
+
+	mem_del( pieceBuf );
+
+	chromeBuf.unlock_buf();
+	chromeBuf.deinit();
+}
+//--------- End of function Info::disp_panel_docked ---------//
+
+
 //-------- Begin of function Info::disp_panel --------//
 //
 void Info::disp_panel()
 {
-	image_interface.put_to_buf( &vga_back, "MAINSCR" );
+	if( vga_is_wide_viewport() )
+		disp_panel_docked();
+	else
+		image_interface.put_to_buf( &vga_back, "MAINSCR" );
 
 	//------ keep a copy of bitmap of the panel texture -----//
 

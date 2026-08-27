@@ -30,6 +30,8 @@
 #include <version.h>
 #include <FilePath.h>
 #include <ConfigAdv.h>
+#include <OWORLDMT.h>   // ZOOM_LEGACY_* and the runtime layout variables it declares
+#include <CmdLine.h>
 
 DBGLOG_DEFAULT_CHANNEL(Vga);
 
@@ -61,6 +63,72 @@ static void init_window_size();
 int vga_buf_width  = VGA_LEGACY_WIDTH;
 int vga_buf_height = VGA_LEGACY_HEIGHT;
 
+//-------- Begin of function vga_init_layout ----------//
+//
+// Decide the render buffer size and where the HUD chrome sits in it.
+//
+// Legacy mode reproduces the 1997 layout exactly: an 800x600 buffer with the
+// map viewport at 0,56 - 575,599.
+//
+// Wide mode renders into a buffer the size of the window, so sprites stay at
+// native scale and the viewport simply covers more tiles. The chrome is
+// docked rather than stretched: the top strip stays at the top left where its
+// baked-in buttons are, and the sidebar (minimap + info panel) moves to the
+// right edge. The map viewport is everything left between them, rounded DOWN
+// to a whole number of 32px tiles -- Matrix::init_var() derives disp_x_loc by
+// truncating image_width/loc_width, so a viewport that is not a tile multiple
+// would leave its last column unpainted. The <32px remainder is left to the
+// chrome, which fills it along with the rest of the gap.
+//
+// <int> winWidth, winHeight = the window size to fill in wide mode
+//
+static void vga_init_layout(int winWidth, int winHeight)
+{
+   int w = VGA_LEGACY_WIDTH;
+   int h = VGA_LEGACY_HEIGHT;
+
+   if( config_adv.vga_wide_viewport )
+   {
+      // Never go below the legacy size -- the HUD chrome is a fixed 800x600
+      // bitmap and has nowhere to shrink to.
+      w = MAX(winWidth,  VGA_LEGACY_WIDTH);
+      h = MAX(winHeight, VGA_LEGACY_HEIGHT);
+      w = MIN(w, VGA_MAX_WIDTH);
+      h = MIN(h, VGA_MAX_HEIGHT);
+   }
+
+   vga_buf_width  = w;
+   vga_buf_height = h;
+
+   // Sidebar keeps its 224px width and its internal y layout; it just moves
+   // right so its right edge lands on the buffer's right edge.
+   hud_sidebar_x_offset = w - VGA_LEGACY_WIDTH;
+
+   zoom_win_x1 = ZOOM_LEGACY_X1;
+   zoom_win_y1 = ZOOM_LEGACY_Y1;
+
+   int availWidth  = (ZOOM_LEGACY_X2 - ZOOM_LEGACY_X1 + 1) + hud_sidebar_x_offset;
+   int availHeight = h - ZOOM_LEGACY_Y1;
+
+   zoom_win_width  = (availWidth  / ZOOM_LOC_WIDTH ) * ZOOM_LOC_WIDTH;
+   zoom_win_height = (availHeight / ZOOM_LOC_HEIGHT) * ZOOM_LOC_HEIGHT;
+
+   zoom_win_x2 = zoom_win_x1 + zoom_win_width  - 1;
+   zoom_win_y2 = zoom_win_y1 + zoom_win_height - 1;
+}
+//-------- End of function vga_init_layout ----------//
+
+//-------- Begin of function vga_is_wide_viewport ----------//
+//
+// Whether the buffer is larger than the legacy 800x600, i.e. whether the HUD
+// chrome has to be docked and its gaps filled rather than blitted whole.
+//
+int vga_is_wide_viewport()
+{
+   return vga_buf_width > VGA_LEGACY_WIDTH || vga_buf_height > VGA_LEGACY_HEIGHT;
+}
+//-------- End of function vga_is_wide_viewport ----------//
+
 //------ Define static class member vars ---------//
 
 char    Vga::use_back_buf = 0;
@@ -81,6 +149,8 @@ Vga::Vga()
    window = NULL;
    vsync_active = 0;
    present_interval_ms = 1000 / PRESENT_FALLBACK_HZ;
+   screenshot_frames_left = 0;
+   present_legacy = 0;
 }
 //-------- End of function Vga::Vga ----------//
 
@@ -113,6 +183,13 @@ int Vga::init()
       return 0;
 
    init_window_size();
+
+   // Must run before anything below allocates from VGA_WIDTH/VGA_HEIGHT.
+   vga_init_layout(config_adv.vga_window_width, config_adv.vga_window_height);
+
+   // Number of presented frames to let go by before the screenshot dump, so
+   // the screen being captured has actually finished drawing.
+   screenshot_frames_left = cmd_line.screenshot_path ? 16 : 0;
 
    // Save the mouse position to restore after mode change. If we don't do
    // this, then the old position gets recalculated, with the mode change
@@ -994,10 +1071,113 @@ void Vga::flip()
    SDL_BlitSurface(vga_front.surface, NULL, target, NULL);
    SDL_UpdateTexture(texture, NULL, target->pixels, target->pitch);
    SDL_RenderClear(renderer);
-   SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+   if( present_legacy )
+   {
+      SDL_Rect srcRect = { 0, 0, VGA_LEGACY_WIDTH, VGA_LEGACY_HEIGHT };
+      SDL_RenderCopy(renderer, texture, &srcRect, NULL);
+   }
+   else
+   {
+      SDL_RenderCopy(renderer, texture, NULL, NULL);
+   }
+
    SDL_RenderPresent(renderer);
+
+   // -headless-screenshot: let a few frames present so whichever screen is up
+   // is fully drawn, then dump it and quit. Hooked here rather than in a
+   // specific loop so it captures menus, which run their own loops, as well
+   // as gameplay.
+   if( screenshot_frames_left > 0 && --screenshot_frames_left == 0 )
+   {
+      printf("SCREENSHOT=%s %dx%d %s\n",
+             cmd_line.screenshot_path, present_width(), present_height(),
+             save_screenshot(cmd_line.screenshot_path) ? "ok" : "FAILED");
+      fflush(stdout);
+      sys.signal_exit_flag = 1;
+   }
 }
 //-------- End of function Vga::flip ----------//
+
+
+//-------- Begin of function Vga::set_legacy_present ----------//
+//
+// Choose whether flip() presents the whole buffer or just the legacy corner.
+//
+// The main menu, the option screens, the encyclopedia and the report screens
+// were all laid out against a fixed 800x600 and hit-test their widgets
+// against those same coordinates, so they cannot simply be moved: drawing
+// them anywhere but the buffer's top-left corner would put the pixels and
+// the click targets out of step. Instead they keep drawing where they always
+// did and only that corner is presented, scaled to fill the window -- which
+// is exactly what the game did at every resolution before the wide viewport
+// existed. Gameplay presents the whole buffer and so stays at native scale.
+//
+// Driven from the two points every screen passes through:
+// spread_full_screen_image() (OIMGRES.cpp) turns it on, and Sys::disp_frame()
+// turns it off on every gameplay frame -- deliberately every frame rather
+// than only on a redraw, so no path back from a menu can leave it stuck on.
+//
+// A no-op in legacy mode, where the two regions are the same size.
+//
+// <int> on = 1 to present the legacy corner only
+//
+void Vga::set_legacy_present(int on)
+{
+   if( !renderer || !vga_is_wide_viewport() )
+      return;
+
+   if( present_legacy == (char)(on != 0) )
+      return;
+
+   present_legacy = (on != 0);
+
+   if( config_adv.vga_keep_aspect_ratio )
+      SDL_RenderSetLogicalSize(renderer, present_width(), present_height());
+
+   update_boundary();
+}
+//-------- End of function Vga::set_legacy_present ----------//
+
+
+//-------- Begin of function Vga::save_screenshot ----------//
+//
+// Write the current front buffer out as a palettised BMP.
+//
+// Renders through the same path a display would, so it works under
+// SDL_VIDEODRIVER=dummy -- which is the point: it lets the HUD layout be
+// reviewed at an arbitrary buffer size with no display attached.
+//
+// <char*> filePath = where to write the .bmp
+//
+// return : 1 on success, 0 on failure
+//
+int Vga::save_screenshot(const char* filePath)
+{
+   if( !vga_front.surface )
+      return 0;
+
+   // Dump what is actually presented, not the whole buffer -- while a legacy
+   // full-screen screen is up that is just the 800x600 corner.
+   int shotWidth  = present_width();
+   int shotHeight = present_height();
+
+   SDL_Surface *shot = SDL_CreateRGBSurface(0, shotWidth, shotHeight, VGA_BPP, 0, 0, 0, 0);
+   if( !shot )
+      return 0;
+
+   SDL_SetPaletteColors(shot->format->palette, game_pal, 0, VGA_PALETTE_SIZE);
+
+   for( int y = 0; y < shotHeight; ++y )
+      memcpy( (char*)shot->pixels + shot->pitch*y,
+              vga_front.buf_ptr() + vga_front.buf_pitch()*y,
+              shotWidth );
+
+   int ok = SDL_SaveBMP(shot, filePath) == 0;
+   SDL_FreeSurface(shot);
+   return ok;
+}
+//-------- End of function Vga::save_screenshot ----------//
 
 
 //-------- Beginning of function Vga::save_status_report ----------//
@@ -1160,8 +1340,8 @@ void Vga::get_window_scale(float *xscale, float *yscale)
    {
       int w, h;
       SDL_GetWindowSize(window, &w, &h);
-      *xscale = (float)w / (float)VGA_WIDTH;
-      *yscale = (float)h / (float)VGA_HEIGHT;
+      *xscale = (float)w / (float)present_width();
+      *yscale = (float)h / (float)present_height();
    }
 }
 //-------- End of function Vga::get_window_scale ----------//
@@ -1230,7 +1410,7 @@ static int init_window_flags()
 
 static void init_window_size()
 {
-   if( !config_adv.vga_full_screen_desktop )
+   if( !config_adv.vga_full_screen_desktop && !config_adv.vga_wide_viewport )
    {
       // must match game's native resolution
       config_adv.vga_window_width = 800;
@@ -1240,6 +1420,36 @@ static void init_window_size()
 
    if( config_adv.vga_window_width && config_adv.vga_window_height )
       return;
+
+   // The wide viewport renders 1:1 into a buffer this size, so "bigger" means
+   // more tiles on screen rather than a larger upscale factor: take the whole
+   // usable display area instead of the fixed 1024x768 / 800x600 / 640x480
+   // ladder below, which only ever existed to pick an upscale target.
+   if( config_adv.vga_wide_viewport )
+   {
+#if SDL_VERSION_ATLEAST(2, 0, 5)
+      SDL_Window *probe_win = SDL_CreateWindow(WIN_TITLE, 0, 0, 1, 1, 0);
+      if( probe_win )
+      {
+         int probe_idx = SDL_GetWindowDisplayIndex(probe_win);
+         SDL_DestroyWindow(probe_win);
+
+         SDL_Rect probe_rect;
+         if( probe_idx >= 0 && SDL_GetDisplayUsableBounds(probe_idx, &probe_rect) == 0
+             && probe_rect.w >= VGA_LEGACY_WIDTH && probe_rect.h >= VGA_LEGACY_HEIGHT )
+         {
+            config_adv.vga_window_width  = probe_rect.w;
+            config_adv.vga_window_height = probe_rect.h;
+            return;
+         }
+      }
+#endif
+      // Display size unreadable, or too small to fit the HUD chrome: fall
+      // back to legacy, which always fits.
+      config_adv.vga_window_width  = VGA_LEGACY_WIDTH;
+      config_adv.vga_window_height = VGA_LEGACY_HEIGHT;
+      return;
+   }
 
 #if SDL_VERSION_ATLEAST(2, 0, 5)
    int display_idx;

@@ -113,6 +113,10 @@ public:
 	char			vga_pause_on_focus_loss;
 	char			vga_scale_quality;   // see enum below
 	char			vga_vsync;           // request SDL_RENDERER_PRESENTVSYNC (default off, see reset())
+	// Render into a buffer as large as the window instead of a fixed 800x600
+	// one, so the map viewport covers more tiles at native sprite scale
+	// rather than the same tiles magnified. Default off -- legacy 800x600.
+	char			vga_wide_viewport;
 
 	int			vga_window_width;
 	int			vga_window_height;

@@ -218,6 +218,57 @@ void ImageRes::put_large(VgaBuf* vgaBuf, int x, int y, int bitmapId)
 //---------- End of function ImageRes::put_large --------//
 
 
+//-------- Start of function spread_full_screen_image --------//
+//
+// Lay a full-screen image out inside a VgaBuf that may be larger than it.
+//
+// put_to_buf() reads the raw pixels of a full-screen image straight into the
+// destination buffer as one flat run. The rows then have to be re-spread to
+// the buffer's pitch -- and the source rows are VGA_LEGACY_WIDTH wide, since
+// that is the resolution these images were authored at, regardless of how
+// large the buffer now is.
+//
+// The image is anchored top-left rather than centred: every one of these
+// screens hit-tests its widgets against hardcoded 800x600 coordinates, so
+// moving the pixels without moving the hit rects would put the two out of
+// step. Whatever the image does not cover is cleared to black.
+//
+static void spread_full_screen_image(VgaBuf* vgaBufPtr)
+{
+	// A full-screen image landing on a *screen* buffer means a legacy 800x600
+	// screen is now what the player is looking at, so present the legacy
+	// corner only until the next gameplay frame turns it back off. Loading one
+	// into a scratch buffer is just asset handling and means no such thing --
+	// Info::disp_panel_docked() does exactly that to cut up the HUD chrome.
+	if( vgaBufPtr == &vga_back || vgaBufPtr == &vga_front )
+		vga.set_legacy_present(1);
+
+	int p = vgaBufPtr->buf_pitch();
+	int w = MIN( vgaBufPtr->buf_width(),  VGA_LEGACY_WIDTH  );
+	int h = MIN( vgaBufPtr->buf_height(), VGA_LEGACY_HEIGHT );
+
+	if( p > w || vgaBufPtr->buf_width() > VGA_LEGACY_WIDTH )
+	{
+		char *basePtr = vgaBufPtr->buf_ptr();
+
+		for( int y = h-1; y > 0; --y )         // row 0 is already in place
+			memmove( basePtr + p*y, basePtr + VGA_LEGACY_WIDTH*y, w );
+	}
+
+	//--- clear whatever the 800x600 image does not reach ---//
+
+	for( int y = 0; y < h; ++y )
+	{
+		if( vgaBufPtr->buf_width() > w )
+			memset( vgaBufPtr->buf_ptr() + p*y + w, 0, vgaBufPtr->buf_width() - w );
+	}
+
+	for( int y = h; y < vgaBufPtr->buf_height(); ++y )
+		memset( vgaBufPtr->buf_ptr() + p*y, 0, vgaBufPtr->buf_width() );
+}
+//---------- End of function spread_full_screen_image --------//
+
+
 //-------- Start of function ImageRes::put_to_buf --------//
 //
 // Put the image to the specified Vga buffer. 
@@ -231,18 +282,7 @@ void ImageRes::put_to_buf(VgaBuf* vgaBufPtr, const char* imageName)
 	read(imageName);
 	reset_user_buf();
 
-	// ---------- move data if buf_pitch() > buf_width() ---------//
-	if( vgaBufPtr->buf_pitch() > vgaBufPtr->buf_width() )
-	{
-		int y = vgaBufPtr->buf_height()-1;
-		int p = vgaBufPtr->buf_pitch();
-		int w = vgaBufPtr->buf_width();
-		char *srcPtr = vgaBufPtr->buf_ptr() + w * y;
-		char *destPtr = vgaBufPtr->buf_ptr() + p * y;
-
-		for( ; y > 0; --y, srcPtr -= w, destPtr -= p  )         // no need to move the first line
-			memmove( destPtr, srcPtr, w );
-	}
+	spread_full_screen_image( vgaBufPtr );
 }
 //---------- End of function ImageRes::put_to_buf --------//
 
@@ -260,18 +300,7 @@ void ImageRes::put_to_buf(VgaBuf* vgaBufPtr, int bitmapId)
 	get_data(bitmapId);
 	reset_user_buf();
 
-	// ---------- move data if buf_pitch() > buf_width() ---------//
-	if( vgaBufPtr->buf_pitch() > vgaBufPtr->buf_width() )
-	{
-		int y = vgaBufPtr->buf_height()-1;
-		int p = vgaBufPtr->buf_pitch();
-		int w = vgaBufPtr->buf_width();
-		char *srcPtr = vgaBufPtr->buf_ptr() + w * y;
-		char *destPtr = vgaBufPtr->buf_ptr() + p * y;
-
-		for( ; y > 0; --y, srcPtr -= w, destPtr -= p  )         // no need to move the first line
-			memmove( destPtr, srcPtr, w );
-	}
+	spread_full_screen_image( vgaBufPtr );
 }
 //---------- End of function ImageRes::put_to_buf --------//
 
