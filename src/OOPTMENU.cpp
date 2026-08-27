@@ -38,6 +38,7 @@
 #include <OSYS.h>
 #include <ConfigAdv.h>
 #include <OOPTMENU.h>
+#include <OBOX.h>
 #include "gettext.h"
 
 
@@ -89,7 +90,7 @@ static void disp_slide_bar(SlideBar *slideBar, int);
 
 OptionMenu::OptionMenu() : help_group(3), news_group(2), report_group(2) ,
 	show_icon_group(2), show_path_group(4), scale_quality_group(3), vsync_group(2),
-	scroll_mode_group(3)
+	scroll_mode_group(3), wide_view_group(2)
 
 {
 	active_flag = 0;
@@ -255,8 +256,32 @@ void OptionMenu::enter(char untilExitFlag)
 		}
 	}
 
+	// --------- initialize wide viewport button group ---------- //
+	//
+	// The only clear space left in the bottom band. The band's decorative
+	// corners run to x=77 on the left and from x=723 on the right, the Return
+	// button occupies x 200-365 and Cancel x 416-581, and V-Sync already has
+	// the strip right of Cancel -- which leaves x 85-196 at the V-Sync row's
+	// height, with its label above in the same column.
+
+	{
+		const char* wide_view_label[2] = { _("On"), _("Off") };
+		const int bx1 = 86, by1 = 546, bw = 53, bh = 21, gap = 2;
+
+		for( i = 0; i < 2; ++i )
+		{
+			wide_view_group[i].create( bx1+i*(bw+gap), by1,
+				bx1+i*(bw+gap)+bw-1, by1+bh-1,
+				ButtonCustom::disp_text_button_func,
+				ButtonCustomPara((void*)wide_view_label[i], 1-i), 0, 0 );
+		}
+	}
+
 	old_scale_quality = config_adv.vga_scale_quality;
 	scale_quality_changed = 0;
+
+	old_wide_viewport = config_adv.vga_wide_viewport;
+	wide_viewport_changed = 0;
 
 	old_vsync = config_adv.vga_vsync;
 	vsync_changed = 0;
@@ -310,6 +335,7 @@ void OptionMenu::disp(int needRepaint)
 			vga.use_back();
 			font_san.put(82, 503, _("Scale Filter"));
 			font_san.put(585, 528, _("V-Sync"));
+			font_san.put(86, 528, _("Wide View"));
 			font_san.put(420, 503, _("Scrolling"));
 			vga.use_front();
 
@@ -376,6 +402,7 @@ void OptionMenu::disp(int needRepaint)
 			// group is ordered { On, Off } with values { 1, 0 }, so the
 			// index is the complement -- same idiom as show_icon_group above
 			vsync_group.paint(1 - config_adv.vga_vsync);
+			wide_view_group.paint(1 - config_adv.vga_wide_viewport);
 		}
 		if( refresh_flag & IGOPTION_SCROLL_MODE )
 		{
@@ -498,6 +525,16 @@ int OptionMenu::detect()
 		vga.set_vsync( (char) vsync_group[vsync_group()].custom_para.value );
 		vsync_changed = 1;
 	}
+	else if( wide_view_group.detect() >= 0)
+	{
+		// Only stores the preference: the buffer size, the HUD layout and the
+		// two matrices' window rects are all settled during Vga::init(), so
+		// this one cannot be applied without a restart. Say so rather than
+		// leaving the player wondering why nothing moved.
+		config_adv.vga_wide_viewport =
+			(char) wide_view_group[wide_view_group()].custom_para.value;
+		wide_viewport_changed = 1;
+	}
 	else if( scroll_mode_group.detect() >= 0)
 	{
 		// Both flags are read fresh on the next scroll, so there is nothing to
@@ -542,6 +579,13 @@ int OptionMenu::detect()
 			config_adv.persist_scroll_frame_align();
 			config_adv.persist_scroll_sub_pixel();
 		}
+
+		if( wide_viewport_changed &&
+			 config_adv.vga_wide_viewport != old_wide_viewport )
+		{
+			config_adv.persist_vga_wide_viewport();
+			box.msg( _("The map view size will change the next time you start the game.") );
+		}
 	}
 	else if( cancel_button.detect(KEY_ESC) )
 	{
@@ -558,6 +602,9 @@ int OptionMenu::detect()
 			config_adv.scroll_frame_align = old_scroll_frame_align;
 			config_adv.scroll_sub_pixel = old_scroll_sub_pixel;
 		}
+
+		if( wide_viewport_changed )
+			config_adv.vga_wide_viewport = old_wide_viewport;
 
 		exit(0);
 	}

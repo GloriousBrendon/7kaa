@@ -364,6 +364,15 @@ int ConfigAdv::persist_vga_vsync()
 //--------- End of function ConfigAdv::persist_vga_vsync -------------//
 
 
+//--------- Begin of function ConfigAdv::persist_vga_wide_viewport -------------//
+//
+int ConfigAdv::persist_vga_wide_viewport()
+{
+	return persist_setting("vga_wide_viewport", vga_wide_viewport ? "true" : "false");
+}
+//--------- End of function ConfigAdv::persist_vga_wide_viewport -------------//
+
+
 //--------- Begin of function ConfigAdv::persist_scroll_frame_align -------------//
 //
 int ConfigAdv::persist_scroll_frame_align()

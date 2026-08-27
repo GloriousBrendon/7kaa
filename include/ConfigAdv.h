@@ -147,6 +147,9 @@ public:
 	// same, for vga_vsync
 	int			persist_vga_vsync();
 
+	// same, for vga_wide_viewport
+	int			persist_vga_wide_viewport();
+
 	// same, for scroll_frame_align
 	int			persist_scroll_frame_align();
 
