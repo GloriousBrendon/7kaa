@@ -24,6 +24,7 @@
 #ifndef __CONFIGADV_H
 #define __CONFIGADV_H
 
+#include <FilePath.h>
 #include <GAMEDEF.h>
 #include <stdint.h>
 
@@ -127,6 +128,19 @@ public:
 
 	// wall settings
 	char			wall_building_allowed;
+
+	// diagnostics -- NOT a setting
+	// The path config.txt was actually loaded from, or "" if no file was
+	// found and every setting above is a reset() default. load() resolves
+	// config.txt against sys.dir_config ($SKCONFIG) first and then falls
+	// back to a bare relative name, which resolves against the game data
+	// dir that Sys::chdir_to_game_dir() has already chdir'd into -- so
+	// "which file did we actually read" is not answerable from the
+	// environment alone. Recording it makes that visible to logs and lets
+	// the Phase 0 harness assert its own config isolation instead of
+	// trusting it. Never passed through set()/update_check_sum(), so it
+	// stays out of the multiplayer version checksum.
+	char			loaded_path[FilePath::MAX_FILE_PATH];
 
 public:
 	// SDL_HINT_RENDER_SCALE_QUALITY modes for vga_scale_quality

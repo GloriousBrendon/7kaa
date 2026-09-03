@@ -903,6 +903,12 @@ void Sys::main_loop(int isLoadedGame)
                   printf("HARNESS_BUSY_MS=%u\n", (unsigned)harnessBusyMs);
                   printf("HARNESS_FRAME_ITERS=%u\n", (unsigned)harnessFrameIters);
                   printf("HARNESS_LOOP_ITERS=%u\n", (unsigned)harnessLoopIters);
+                  // Which config.txt this run actually read (see
+                  // ConfigAdv::load()). The harness asserts on this so a
+                  // run that silently picked up a stray config.txt fails
+                  // loudly instead of just reporting odd timings.
+                  printf("HARNESS_CONFIG_PATH=%s\n",
+                         config_adv.loaded_path[0] ? config_adv.loaded_path : "(none)");
                   fflush(stdout);
                   signal_exit_flag = 1;
                }

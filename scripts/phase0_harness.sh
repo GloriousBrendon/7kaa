@@ -120,6 +120,37 @@
 # runs measured 45567-45569ms against a 41667ms floor, i.e. ~9.4% *above*,
 # never below. Default margin is 2%.
 #
+# CONFIG ISOLATION — why every run pins its own empty config.txt:
+#   ConfigAdv::load() (src/ConfigAdv.cpp) looks for config.txt under
+#   $SKCONFIG first, and if it isn't there falls back to a BARE RELATIVE
+#   "config.txt". By the time that fallback runs, Sys::chdir_to_game_dir()
+#   (src/OSYS.cpp) has already chdir'd the process into $SKDATA — so the
+#   fallback resolves to data/config.txt, an untracked personal settings
+#   file, not to anything this script controls. Pointing SKCONFIG at an
+#   empty scratch dir is therefore NOT enough on its own; it only
+#   guarantees that the *first* lookup misses.
+#
+#   That is exactly what went wrong. The gate was silently measuring
+#   whichever data/config.txt happened to be on disk (vga_vsync,
+#   vga_wide_viewport, scroll_sub_pixel et al. all move fast-mode cost),
+#   and three consecutive --fast-only runs at one unchanged commit came
+#   back FAIL / PASS / FAIL — medians of 121, 95 and 103 ms against a
+#   [58, 97] band. A gate whose verdict depends on an untracked file is
+#   worse than no gate, because it still looks like a gate.
+#
+#   The fix has two halves, and the second is the load-bearing one:
+#     1. run_harness() writes an EMPTY config.txt into the scratch dir, so
+#        the first lookup hits and the fallback is never reached. Empty
+#        rather than a file spelling out every setting: if a default in
+#        ConfigAdv::reset() ever flips, the gate should still notice it,
+#        not pin over it.
+#     2. The binary prints HARNESS_CONFIG_PATH — the path load() actually
+#        used — and run_harness() ASSERTS it is that scratch file. Half 1
+#        on its own would rebuild the original failure mode: right while it
+#        works, silent when it stops. If ConfigAdv's lookup order changes,
+#        or the pin stops being written, the harness now dies naming the
+#        wrong path instead of quietly measuring the wrong thing again.
+#
 # USAGE
 #   scripts/phase0_harness.sh                  # build, run both checks
 #   scripts/phase0_harness.sh --skip-build      # reuse the existing src/7kaa binary
@@ -195,7 +226,7 @@ while [ $# -gt 0 ]; do
 			shift 2
 			;;
 		-h|--help)
-			sed -n '2,145p' "$0" | sed 's/^# \{0,1\}//'
+			sed -n '2,176p' "$0" | sed 's/^# \{0,1\}//'
 			exit 0
 			;;
 		*)
@@ -234,6 +265,13 @@ fi
 run_harness() {
 	local scratch_config
 	scratch_config="$(mktemp -d)"
+
+	# Pin an empty config.txt so ConfigAdv::load() stops at $SKCONFIG and
+	# never reaches its bare-relative fallback into the game data dir.
+	# See CONFIG ISOLATION in the header for why SKCONFIG alone isn't enough.
+	local expected_config="$scratch_config/config.txt"
+	: > "$expected_config"
+
 	local output
 	output="$(cd "$REPO_ROOT/src" && \
 		SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
@@ -252,10 +290,31 @@ run_harness() {
 	RUN_BUSY_MS="$(echo "$output" | grep '^HARNESS_BUSY_MS=' | cut -d= -f2)"
 	RUN_FRAME_ITERS="$(echo "$output" | grep '^HARNESS_FRAME_ITERS=' | cut -d= -f2)"
 	RUN_LOOP_ITERS="$(echo "$output" | grep '^HARNESS_LOOP_ITERS=' | cut -d= -f2)"
+	# -f2- (not -f2): a config path may legitimately contain '='. The
+	# `|| true` keeps a binary too old to print this field from tripping
+	# `set -e` here, so it reaches the named error below instead.
+	RUN_CONFIG_PATH="$(echo "$output" | grep '^HARNESS_CONFIG_PATH=' | cut -d= -f2- || true)"
 
 	if [ -z "$RUN_CRC" ] || [ -z "$RUN_WALLTIME_MS" ]; then
 		echo "ERROR: harness output missing expected HARNESS_* fields. Full output:" >&2
 		echo "$output" >&2
+		exit 1
+	fi
+
+	# Config isolation assert. Fatal, not a warning: a run that read some
+	# other config.txt measured a build configuration this script did not
+	# choose, so every number it produced is meaningless and comparing them
+	# against the baseline is worse than not running at all.
+	if [ "$RUN_CONFIG_PATH" != "$expected_config" ]; then
+		echo "ERROR: config isolation broken -- this run loaded config.txt from" >&2
+		echo "         ${RUN_CONFIG_PATH:-<binary printed no HARNESS_CONFIG_PATH>}" >&2
+		echo "       but the harness pinned" >&2
+		echo "         $expected_config" >&2
+		echo "       If the loaded path is a bare relative name, ConfigAdv::load()" >&2
+		echo "       fell through to the game data dir and picked up an untracked" >&2
+		echo "       personal config.txt. Either way, see CONFIG ISOLATION in this" >&2
+		echo "       script's header." >&2
+		echo "       Refusing to report timings measured under unknown settings." >&2
 		exit 1
 	fi
 }

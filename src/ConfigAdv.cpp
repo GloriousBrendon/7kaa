@@ -23,6 +23,7 @@
 
 #include <ConfigAdv.h>
 #include <FilePath.h>
+#include <dbglog.h>
 #include <ONATIONB.h>
 #include <OFILETXT.h>
 #include <OMISC.h>
@@ -129,6 +130,11 @@ ConfigAdv::ConfigAdv()
 
 	// this is set on program load for LocaleRes
 	locale[0] = 0;
+
+	// diagnostic; load() fills it in if it finds a file. Deliberately not
+	// cleared by reset(), so a file that failed to parse is still
+	// attributable after init()'s reset-on-failure path.
+	loaded_path[0] = 0;
 }
 //--------- End of function ConfigAdv::ConfigAdv --------//
 
@@ -169,6 +175,17 @@ int ConfigAdv::load(char *filename)
 		if( full_path.error_flag || !misc.is_file_exist(full_path) )
 			return 0;
 	}
+
+	// Record which file won before parsing it. The fallback above resolves
+	// a bare "config.txt" against the current directory -- which by this
+	// point is the game data dir (Sys::chdir_to_game_dir()), not wherever
+	// the process was launched from -- so a caller that thinks it pinned
+	// $SKCONFIG can silently get a config.txt sitting in the data dir
+	// instead. Logging the winner is what makes that visible rather than
+	// silent; see docs/remaster/FINDINGS.md.
+	strncpy(loaded_path, full_path, sizeof(loaded_path)-1);
+	loaded_path[sizeof(loaded_path)-1] = 0;
+	MSG("Advanced config loaded from: %s\n", loaded_path);
 
 	FileTxt fileTxt(full_path);
 	int line = 0;
