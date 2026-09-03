@@ -462,6 +462,29 @@ void ConfigAdv::reset()
 	unit_target_move_range_cycle = 0;
 
 	vga_allow_highdpi = 0;
+
+	// On by default: 1 = legacy. OpenALAudio::yield() constructs a
+	// VgaFrontLock, whose ctor unlocks the front buffer, and
+	// VgaBuf::unlock_buf() presents a frame on the way out -- so audio
+	// housekeeping drives presentation, at whatever rate the firm/sprite
+	// processing loops happen to call sys.yield(). Setting this to 0 breaks
+	// that coupling and leaves presentation to the render path alone.
+	//
+	// It stays opt-in because how much it matters is driver-dependent, and
+	// the two stacks measured disagree sharply. On SDL2 proper (the Phase 1e
+	// reference machine) SDL_RenderPresent() did not block, so flip()'s
+	// presentation-interval gate absorbed the extra calls and this reads as
+	// a tidy-up. On sdl2-compat 2.32 over SDL3 (this machine), with
+	// vga_vsync and vga_wide_viewport both on -- two settings the Options
+	// menu offers -- every present blocks for a full presentation interval,
+	// and because these presents are reached from inside Sys::process() they
+	// block the simulation rather than the renderer. Headless fast-mode
+	// medians there: 73134ms vs 154ms at 100 days, 876867ms vs 302ms at 200.
+	// Same code, three orders of magnitude apart -- so it needs to stay
+	// A/B-testable rather than being flipped silently for everyone.
+	// docs/remaster/FINDINGS.md carries the full curve.
+	vga_audio_yield_flip = 1;
+
 	vga_full_screen = 1;
 	vga_full_screen_desktop = 1;
 	// On by default: both the main loop and the menu loops used to spin a
@@ -715,6 +738,11 @@ int ConfigAdv::set(char *name, char *value)
 	else if( !strcmp(name, "vga_allow_highdpi") )
 	{
 		if( !read_bool(value, &vga_allow_highdpi) )
+			return 0;
+	}
+	else if( !strcmp(name, "vga_audio_yield_flip") )
+	{
+		if( !read_bool(value, &vga_audio_yield_flip) )
 			return 0;
 	}
 	else if( !strcmp(name, "vga_full_screen") )

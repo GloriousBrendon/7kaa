@@ -104,6 +104,10 @@ public:
 
 	// vga settings
 	char			vga_allow_highdpi;
+	// let OpenALAudio::yield() keep presenting a frame as a side effect of
+	// audio housekeeping (the legacy VgaFrontLock hack). Default on = legacy;
+	// see reset() and src/openal/openal_audio.cpp :: OpenALAudio::yield()
+	char			vga_audio_yield_flip;
 	char			vga_full_screen;
 	char			vga_full_screen_desktop;
 	// nap briefly between simulation frames, and in the menu loops, instead

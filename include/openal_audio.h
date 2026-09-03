@@ -170,6 +170,11 @@ private:
 	int stop_any_wav(int);
 
 	int play_long_wav(InputStream *, const DsVolume &);
+
+	// the actual work of yield(): retire streams that have finished
+	// playing. Split out of yield() so the legacy front-buffer unlock can
+	// wrap it without duplicating the loop -- see yield().
+	void reap_finished_streams();
 };
 
 typedef OpenALAudio Audio;

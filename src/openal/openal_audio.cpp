@@ -25,6 +25,7 @@
 #include <vector>
 #include <cstdlib>
 
+#include <ConfigAdv.h>
 #include <OVGALOCK.h>
 #include <dbglog.h>
 #include <file_input_stream.h>
@@ -777,13 +778,12 @@ int OpenALAudio::is_loop_wav_fading(int id)
 	return (itr->second->fade_frames != 0);
 }
 
-void OpenALAudio::yield()
+//
+// Retire streams that have finished playing. This is all yield() actually
+// needs to do; see yield() for why it is a separate function.
+//
+void OpenALAudio::reap_finished_streams()
 {
-	/* FIXME: This object causes a frame flip.  Looks like a hack that could
-	 * use some fixing.
-	 */
-	VgaFrontLock vgaLock;
-
 	StreamMap::iterator si;
 
 	for (si = this->streams.begin(); si != this->streams.end();)
@@ -820,6 +820,56 @@ void OpenALAudio::yield()
 		}
 
 		++si;
+	}
+}
+
+//
+// Called by Sys::yield(), i.e. from every main-loop iteration and from the
+// firm/sprite processing loops inside Sys::process() (FirmArray::process(),
+// SpriteArray::process()), which yield every 20 objects.
+//
+// Legacy behaviour presents a frame as a side effect of getting here:
+// VgaFrontLock's constructor calls VgaBuf::temp_unlock(), and
+// VgaBuf::unlock_buf() ends with an unconditional vga.flip() for the front
+// buffer. The original author flagged it:
+//
+//     FIXME: This object causes a frame flip.  Looks like a hack that could
+//     use some fixing.
+//
+// It is a hack. The lock itself is vestigial -- since the SDL2 port,
+// lock_buf()/unlock_buf() only move a bool, so nothing here needs the buffer
+// unlocked -- but the flip it drags along is not harmless:
+//
+//   * it presents whatever is in the front buffer at the *top* of a main-loop
+//     iteration, before that iteration has drawn anything, and it consumes
+//     Vga::flip()'s presentation-interval slot, so the freshly rendered frame
+//     that follows can be gated out and dropped;
+//   * it makes presentation rate a function of how many units and firms are
+//     alive, because that is what sets the yield rate;
+//   * where SDL_RenderPresent() blocks, it blocks the *simulation*, because
+//     these presents happen inside process(). Measured headless on this
+//     machine (sdl2-compat 2.32 over SDL3, vsync + wide viewport): a 100-day
+//     fast-mode run spent ~97% of its wall time in presents reached through
+//     this path, and 46602 of the run's 47718 flip() calls originated here.
+//     See docs/remaster/FINDINGS.md for the full day-count curve.
+//
+// Off by default all the same: the cost is driver-dependent. Where
+// SDL_RenderPresent() does not block -- SDL2 proper on the Phase 1e reference
+// machine, or any renderer without vsync -- flip()'s presentation-interval
+// gate absorbs the extra calls and this reads as a tidy-up rather than a
+// speedup. config_adv.vga_audio_yield_flip = 0 drops the coupling; 1 keeps
+// the historical side effect.
+//
+void OpenALAudio::yield()
+{
+	if( config_adv.vga_audio_yield_flip )
+	{
+		VgaFrontLock vgaLock;
+		reap_finished_streams();
+	}
+	else
+	{
+		reap_finished_streams();
 	}
 }
 
