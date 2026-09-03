@@ -24,20 +24,28 @@ Multiplayer is lockstep: every peer runs identical simulation from identical inp
 
 ## Red list — do not edit without explicit human sign-off
 
-Enforced by a `PreToolUse` hook (`scripts/hooks/guard-red-list.sh`), not just documented here:
+Enforced by a `PreToolUse` hook (`scripts/hooks/guard-red-list.sh`), not just documented here — but see **Known enforcement gaps** below before relying on that: this list and the hook's `RED_LIST` array have drifted apart, and some entries here are currently documentation only.
 
 - `src/OGFILE2.cpp`, `src/OGFILE3.cpp` — save-format struct layout
 - `src/OMP_CRC.cpp` — multiplayer sync CRC computation
 - `configure.ac` — determinism build flags
 - `src/OSPATH.cpp` — pathfinding (movement outcomes feed simulation state)
-- `src/ONATIONB.cpp :: add_cheat()` and difficulty-adjacent balance logic
+- `src/ONATIONB.cpp` — the **whole file** is blocked, not just `add_cheat()`; it holds the cheat-income and difficulty-adjacent balance logic, and the hook matches on path, not on function
 - `src/OAI_*.cpp`, `src/OTOWNAI.cpp`, `src/OUNITAI.cpp`, `src/OFIRMAI.cpp` — AI decision logic
 - `scripts/phase0_harness.sh`, `scripts/phase0_baseline.txt` — the regression harness and its baseline. A failing harness run means something changed; editing the baseline to match an unreviewed result, or loosening the script's checks, silences the safety net instead of fixing what it caught
-- `scripts/hooks/guard-red-list.sh`, `.claude/settings.json` — the hook's own protection surface
+- `scripts/hooks/guard-red-list.sh`, `.claude/settings.json`, `.claude/settings.local.json` — the hook's own protection surface. `settings.local.json` matters as much as the other two and is easy to overlook: it is **untracked** (`.gitignore:112`) and takes **precedence** over `settings.json`, so an edit there is both invisible to review and authoritative. An agent that cannot get past a block can use it to grant itself blanket `Bash` permission — and Bash is not intercepted by this hook at all (see below), so that single edit retires the entire red list
 
 `src/OCONFIG.cpp` is deliberately **not** red-listed — nearly every phase adds a config toggle there, and red-listing it would mean fighting the hook on almost every commit.
 
-If you hit the block: it means stop and get human sign-off, not find a way around it. There's a `SEVENKAA_REDLIST_ACK` env var escape hatch for authorized sessions (e.g. Phase 4), but it must be set from the *launch* environment before the session starts — never try to set it yourself mid-session.
+If you hit the block: it means stop and get human sign-off, not find a way around it. There's a `SEVENKAA_REDLIST_ACK` env var escape hatch for authorized sessions (e.g. Phase 4), but it must be set from the *launch* environment before the session starts — never try to set it yourself mid-session. Note that a session started from the **VS Code extension** does not inherit a shell's environment, so the escape hatch is unavailable there even if you launched a terminal that way: the block is real and the answer is human sign-off, not a workaround.
+
+### Known enforcement gaps
+
+Verified 2026-09-03 by feeding crafted `PreToolUse` payloads to the hook. These are *open holes*, not accepted risk — the fix requires editing the hook, which is itself red-listed and so needs sign-off:
+
+1. **Path spelling is not normalised.** The hook compares the raw `file_path` string against `RED_LIST`, so only the exact plain-relative and exact-absolute spellings match. `./src/OMP_CRC.cpp`, `src/../src/OMP_CRC.cpp`, `src//OMP_CRC.cpp` and their absolute equivalents all pass straight through — of 118 valid spellings probed across the 15 red-listed paths, 94 were allowed. The fix is to canonicalise both sides (`realpath -m`) before matching.
+2. **`scripts/phase0_harness.sh` and `scripts/phase0_baseline.txt` are listed above but absent from `RED_LIST`.** The harness and its baseline are documented as protected and are not.
+3. **`.claude/settings.local.json` is absent from `RED_LIST`** — the bypass described above is currently unguarded.
 
 **The hook only matches the `Edit`/`Write` tools.** It does not intercept Bash — `sed -i`, heredoc redirects (`cat > file <<EOF`), `patch`, `dd`, or any other shell-driven write to a red-listed path is not blocked by it. Never use Bash to modify a red-listed file as a way around this guard; the same human-sign-off requirement applies no matter which tool performs the write.
 
