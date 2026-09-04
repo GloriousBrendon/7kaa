@@ -893,8 +893,12 @@ void Sys::main_loop(int isLoadedGame)
                // ###### patch end Gilbert 20/1 ######//
 
                // ---- Phase 0 regression harness exit check ---- //
+               // harness_game_over is set by Game::game_end() when the
+               // scenario ends on its own before the requested day count is
+               // reached; see the day-263 entry in docs/remaster/FINDINGS.md.
                if( cmd_line.harness_days > 0 &&
-                   info.game_date - harnessStartDate >= cmd_line.harness_days )
+                   ( harness_game_over ||
+                     info.game_date - harnessStartDate >= cmd_line.harness_days ) )
                {
                   crc_store.record_all();
                   printf("HARNESS_DAYS=%d\n", info.game_date - harnessStartDate);
@@ -909,6 +913,11 @@ void Sys::main_loop(int isLoadedGame)
                   // loudly instead of just reporting odd timings.
                   printf("HARNESS_CONFIG_PATH=%s\n",
                          config_adv.loaded_path[0] ? config_adv.loaded_path : "(none)");
+                  // Non-zero when the run stopped early because the scenario
+                  // itself ended rather than because it reached the requested
+                  // day count; HARNESS_DAYS above is then short of what was
+                  // asked for, and the harness's own day-count assertion fails.
+                  printf("HARNESS_GAME_OVER=%d\n", (int)harness_game_over);
                   fflush(stdout);
                   signal_exit_flag = 1;
                }

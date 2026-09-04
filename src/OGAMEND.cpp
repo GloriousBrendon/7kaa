@@ -41,6 +41,7 @@
 #include <OMUSIC.h>
 #include <OOPTMENU.h>
 #include <OINGMENU.h>
+#include <CmdLine.h>
 #include <PlayerStats.h>
 // ####### begin Gilbert 29/10 ########//
 #include <OPOWER.h>
@@ -77,6 +78,21 @@ static void split_line(char *line);
 //
 void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNationRecno, int retireFlag)
 {
+	//--- Phase 0 regression harness: never enter the game-ending screens ---//
+	//
+	// The harness runs with no display and no input source, so every wait
+	// below is unclosable: the three mouse.wait_press(60) calls each burn
+	// their full 60s timeout, and the "continue to stay in the game?"
+	// Box::ask() after them never returns at all. Record that the scenario
+	// ended and get out; Sys::main_loop()'s harness exit check prints the
+	// summary and stops on the way out of this frame. Gated on the test-only
+	// -headless-test-days flag, so a normal run never takes this branch.
+	if( cmd_line.harness_days > 0 )
+	{
+		sys.harness_game_over = 1;
+		return;
+	}
+
 	//--- set scenario as complete if the player wins ---//
 	if( nation_array.player_recno && winNationRecno == nation_array.player_recno )
 	{

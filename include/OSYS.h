@@ -102,6 +102,11 @@ public:
 	int 		day_frame_count;
 	uint32_t	next_frame_time;		// next frame's time for maintaining a specific game speed
 	char		in_main_loop;			// inside main_loop()'s frame-paced loop; see yield()
+	// Phase 0 regression harness only: set by Game::game_end() when the
+	// scenario ends on its own (a nation won or was defeated) so main_loop()
+	// stops and reports instead of entering the game-ending screens, which
+	// no headless run can dismiss. Always 0 unless -headless-test-days is on.
+	char		harness_game_over;
 
 	//----- multiplayer vars ----//
 
