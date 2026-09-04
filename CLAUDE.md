@@ -24,7 +24,7 @@ Multiplayer is lockstep: every peer runs identical simulation from identical inp
 
 ## Red list — do not edit without explicit human sign-off
 
-Enforced by a `PreToolUse` hook (`scripts/hooks/guard-red-list.sh`), not just documented here — but see **Known enforcement gaps** below before relying on that: this list and the hook's `RED_LIST` array have drifted apart, and some entries here are currently documentation only.
+Enforced by a `PreToolUse` hook (`scripts/hooks/guard-red-list.sh`), not just documented here. This list and the hook's `RED_LIST` array are in sync as of 2026-09-03 — keep them that way when you add an entry to either. **The hook still does not see Bash**; see **Enforcement scope** below.
 
 - `src/OGFILE2.cpp`, `src/OGFILE3.cpp` — save-format struct layout
 - `src/OMP_CRC.cpp` — multiplayer sync CRC computation
@@ -39,15 +39,19 @@ Enforced by a `PreToolUse` hook (`scripts/hooks/guard-red-list.sh`), not just do
 
 If you hit the block: it means stop and get human sign-off, not find a way around it. There's a `SEVENKAA_REDLIST_ACK` env var escape hatch for authorized sessions (e.g. Phase 4), but it must be set from the *launch* environment before the session starts — never try to set it yourself mid-session. Note that a session started from the **VS Code extension** does not inherit a shell's environment, so the escape hatch is unavailable there even if you launched a terminal that way: the block is real and the answer is human sign-off, not a workaround.
 
-### Known enforcement gaps
+### Enforcement scope
 
-Verified 2026-09-03 by feeding crafted `PreToolUse` payloads to the hook. These are *open holes*, not accepted risk — the fix requires editing the hook, which is itself red-listed and so needs sign-off:
+The three path-matching gaps found on 2026-09-03 were closed the same day (hook rewritten under `SEVENKAA_REDLIST_ACK` sign-off; re-probed with 178 crafted `PreToolUse` payloads across all 15 red-listed paths, 0 allowed — previously 94 of 118 spellings passed straight through):
 
-1. **Path spelling is not normalised.** The hook compares the raw `file_path` string against `RED_LIST`, so only the exact plain-relative and exact-absolute spellings match. `./src/OMP_CRC.cpp`, `src/../src/OMP_CRC.cpp`, `src//OMP_CRC.cpp` and their absolute equivalents all pass straight through — of 118 valid spellings probed across the 15 red-listed paths, 94 were allowed. The fix is to canonicalise both sides (`realpath -m`) before matching.
-2. **`scripts/phase0_harness.sh` and `scripts/phase0_baseline.txt` are listed above but absent from `RED_LIST`.** The harness and its baseline are documented as protected and are not.
-3. **`.claude/settings.local.json` is absent from `RED_LIST`** — the bypass described above is currently unguarded.
+- Paths are now canonicalised before matching. The incoming `file_path` is made absolute against the repo root, then `.`, `..`, and repeated/trailing slashes are collapsed and symlinks resolved via `realpath -m` (with a lexical bash fallback if `realpath` is missing). `./src/OMP_CRC.cpp`, `src/../src/OMP_CRC.cpp`, `src//OMP_CRC.cpp` and their absolute equivalents all block. A relative path is resolved against the **repo root**, not the hook process's cwd, which is not part of the hook contract.
+- `scripts/phase0_harness.sh`, `scripts/phase0_baseline.txt` and `.claude/settings.local.json` are in `RED_LIST`.
+- `NotebookEdit` is also covered: the `settings.json` matcher `Edit|Write` is an unanchored regex, so it fires for `NotebookEdit` too, which names its target `notebook_path` — the hook reads both fields rather than falling through to allow.
 
-**The hook only matches the `Edit`/`Write` tools.** It does not intercept Bash — `sed -i`, heredoc redirects (`cat > file <<EOF`), `patch`, `dd`, or any other shell-driven write to a red-listed path is not blocked by it. Never use Bash to modify a red-listed file as a way around this guard; the same human-sign-off requirement applies no matter which tool performs the write.
+**What the hook still does not cover — unchanged, and structural:**
+
+**The hook only matches the `Edit`/`Write` tools.** It does not intercept Bash — `sed -i`, heredoc redirects (`cat > file <<EOF`), `patch`, `dd`, or any other shell-driven write to a red-listed path is not blocked by it. Never use Bash to modify a red-listed file as a way around this guard; the same human-sign-off requirement applies no matter which tool performs the write. This is why an authorized session should still edit red-listed files with `Edit`/`Write`: it routes the write through the guard and makes the `SEVENKAA_REDLIST_ACK` grant the thing that permits it, rather than sidestepping the check entirely.
+
+Closing the Bash hole needs a second `PreToolUse` hook on `Bash` that parses commands for write redirections and in-place editors — not attempted, since command parsing is far easier to evade than path matching and a partial version would be worse than a documented absence.
 
 ## Don't break this
 
