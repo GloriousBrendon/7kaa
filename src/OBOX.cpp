@@ -226,6 +226,16 @@ int Box::ask_button(const char* buttonDes1, const char* buttonDes2, int rightCli
 		vga.flip();
 		mouse.get_event();
 
+		// Honour a quit request, the same way Mouse::wait_press() and
+		// Button::wait_press() already do. Vga::handle_messages() sets
+		// signal_exit_flag on SDL_QUIT, so without this a window-manager
+		// close (or a SIGTERM, which SDL delivers as SDL_QUIT) is received
+		// and then ignored: this loop has no timeout and no other exit, so
+		// the dialog can only ever be closed with the mouse or keyboard.
+		// Answer as "Cancel", which is what a quit means for every caller.
+		if( sys.signal_exit_flag == 1 )
+			return 0;
+
 		if( sys.debug_session )
 			sys.blt_virtual_buf();
 
