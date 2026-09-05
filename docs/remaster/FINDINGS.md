@@ -48,6 +48,45 @@ The build enforces bit-reproducible floating point **only partially**, and this 
 
 **Worked example — why camera position is safe to smooth but AI decisions are not:** `Matrix::top_x_loc`/`top_y_loc` (the map scroll position) is written to save games (`src/OGFILE2.cpp`, `zoom_matrix->top_x_loc = map_matrix->cur_x_loc;`) but is **not** present anywhere in `src/OMP_CRC.cpp`'s synced fields (only unit `stop_x_loc`/`stop_y_loc` — a different, unrelated per-unit field — appears there). So smoothing camera motion is a client-local presentation concern, safe to change without a determinism strategy. AI decision logic, by contrast, determines unit orders, which *do* feed CRC-synced state — any behavior change there needs the toggle pattern.
 
+### `Firm::init_crc` never trims `linked_firm_enable_array` — a live desync-sensitivity bug (found 2026-09-05, NOT fixed)
+
+Found while scoping the Phase 4 AI harness, which is the first thing in this project to exercise the firm CRC path at all (Phase 0's scenario creates zero firms). **`src/OMP_CRC.cpp` is red-listed and was not touched** — this is a record, not a change.
+
+`src/OMP_CRC.cpp :: Firm::init_crc` copies four variable-length link arrays into the packed `FirmCrc` and is supposed to zero each one past its live element count, so that trailing slots cannot contribute to the hash. `RTRIM_ARRAY` (`src/OMP_CRC.cpp:59`) does that zeroing. Three of the four calls land correctly. One does not — the copies and the trims are interleaved out of order at `src/OMP_CRC.cpp:685-693`:
+
+```
+685  memcpy(&c->linked_firm_array,        linked_firm_array,        …);
+686  RTRIM_ARRAY(c->linked_firm_array,        linked_firm_count);   // ok
+687  memcpy(&c->linked_town_array,        linked_town_array,        …);
+688  RTRIM_ARRAY(c->linked_firm_enable_array, linked_firm_count);   // trims BEFORE the copy…
+690  memcpy(&c->linked_firm_enable_array, linked_firm_enable_array, …);  // …which then overwrites it
+691  RTRIM_ARRAY(c->linked_town_array,        linked_town_count);   // ok
+692  memcpy(&c->linked_town_enable_array, linked_town_enable_array, …);
+693  RTRIM_ARRAY(c->linked_town_enable_array, linked_town_count);   // ok
+```
+
+Line 688 zeroes a destination that line 690 immediately overwrites in full, so **`linked_firm_enable_array` is the one array of the four whose tail reaches `crc8()` untrimmed.**
+
+The tail is not uninitialised — `Firm`'s constructor `memset`s all four arrays (`src/OFIRM.cpp:115-118`), so this is not a read of uninitialised heap and it is *deterministic within a run*. What makes it a real bug is link removal: `src/OFIRM.cpp:3286` removes a link with `misc.del_array_rec(...)`, and that function (`src/OMISC.cpp`) is a bare `memmove` shift-left that **does not clear the slot it vacates**. So after add/add/remove, `linked_firm_enable_array[linked_firm_count]` holds a stale duplicate of the element that used to be last, and that byte goes into the firm's CRC.
+
+Consequence: **two peers whose firms have identical logical link state — same `linked_firm_count`, same live entries — can hash differently purely because they reached that state by a different sequence of link additions and removals.** That is a false-positive desync report, not an actual state divergence, but `remote_compare_object_crc` defaults to 1 (`src/ConfigAdv.cpp`), so it is armed in ordinary multiplayer.
+
+Worth contrasting with `Town::clear_ptr` (`src/OMP_CRC.cpp:623-629`), which handles the same four-array problem on the live-object copy and gets all four right. The Town path is the model; the Firm path is the outlier.
+
+Not fixed here for two reasons: `src/OMP_CRC.cpp` is red-listed, and a fix changes every `FirmCrc` value, which is a save/replay and cross-version-multiplayer compatibility event that needs its own toggle and its own sign-off rather than riding along inside harness work.
+
+### The multiplayer CRC hashes `NationBase`, never `Nation` — the AI's plan is invisible to it (recorded 2026-09-05)
+
+`src/OMP_CRC.cpp :: NationBase::crc8()` hashes exactly `sizeof(NationBase)` bytes of the live object. `Nation` (`include/ONATION.h:177`) derives from `NationBase` and adds everything the AI actually thinks with: `action_array` and `last_action_id`, the thirteen `ai_*_array` pointers and their `ai_*_count`/`ai_*_size` companions, all twenty-eight `pref_*` personality values, `ai_region_array`, `firm_should_close_array`, `attack_camp_array`, and the `ai_capture_enemy_town_*` / `ai_attack_target_*` planning fields. **None of that is in the hash.**
+
+This is not a bug — the derived state is reconstructible and the synced contract is the base class — but it has a sharp practical consequence for Phase 4, and it is why the AI harness reports what it reports:
+
+- The CRC sees the **consequences** of AI decisions (cash, food, populations, unit/firm/town counts, relations — all `NationBase`), never the decisions themselves. A change that alters what the AI *plans* shows up in the CRC only once the plan reaches synced state, which can be many days later, or never if the plan is abandoned.
+- So "the CRC series is unchanged" does **not** mean "the AI behaved identically". It means the AI's effects on synced state were identical over the days measured.
+- Conversely, a CRC divergence tells you *when* the effect landed and nothing about *what* changed — `CRC_TYPE` is a single byte (`include/CRC.h`).
+
+That gap is the entire reason `scripts/phase4_ai_harness.sh` carries a second, independent per-day per-nation metric series alongside the CRC series rather than trusting the CRC alone. See `src/OAIHARN.cpp`.
+
 ### Existing community precedent: the `ConfigAdv` toggle pattern
 
 Bugfixes to gameplay-affecting behavior already ship behind named boolean flags in `include/ConfigAdv.h`/`src/ConfigAdv.cpp`, defaulting to legacy behavior for save/replay compatibility — e.g. `fix_path_blocked_by_team` (`include/ConfigAdv.h :: fix_path_blocked_by_team`, defaulted at `src/ConfigAdv.cpp` line 233, parsed at line 313). **This precedent should be followed by every future phase, not just AI work** — any change to simulation-adjacent behavior should ship as a new named `ConfigAdv` flag, not a silent replacement.
@@ -253,6 +292,8 @@ Do not resolve this by further code reading alone — it needs an empirical run.
 - **Testing caveat: do not re-test the dialog on a real display.** A windowed run puts a real window on the desktop, and a human clicking it dismisses the dialog through the normal button path, masking the fix completely. Two windowed runs during this investigation escaped for exactly that reason and briefly looked like evidence that the bug did not exist. Use `SDL_VIDEODRIVER=dummy`, where `signal_exit_flag` is the only possible exit.
 - **Correction — the "unbounded cost" the original 2026-08-20 entry described was the audio-flip coupling, not simulation cost.** The original measurement (`Battle::run_test()`, `src/OBATTLE.cpp`, reference machine) read 50d≈76 ms, 100d≈152 ms, 200d≈275 ms and then "goes non-linear somewhere in the 200-300 day range — one 300-day run pegged a CPU core for minutes with no sign of completing". Re-measured with the audio coupling removed and `$SKCONFIG/config.txt` pinned to defaults: **50d=77, 100d=132, 200d=258, 210d=313, 220d=323, 230d=292, 240d=305, 250d=323, 260d=330, 262d=337 ms.** That is flat at ~1.5 ms per simulated day with no knee. What bent the original curve was the number of blocking presents in `src/openal/openal_audio.cpp :: OpenALAudio::yield()`, which grows with unit count — see the audio-flip entry in the Rendering section.
 - **Consequence for the harness: day 263 is still a ceiling for this scenario, by design rather than by fault.** The fix makes the run *stop and report* instead of hanging, but it cannot make the scenario last longer — the game genuinely ends there. `scripts/phase0_harness.sh`'s "known landmine" note about raising the day count should be read that way: there is no gradual cost cliff and no longer a hang, but a run configured past 262 days reports fewer days than it asked for and fails the harness's own day-count assertion. If Phase 4 needs longer AI runs, the answer is a scenario that creates a town and a king (`Battle::create_town()` exists and `run_test()` never calls it), not a higher day count against `run_test()`. That is a separate and larger decision.
+
+  **Resolved 2026-09-05: that scenario now exists, as a second and entirely separate harness.** `Battle::run_ai_test()` (`src/OBATTLE.cpp`, reached via `-headless-ai-days`) goes through `Battle::create_pregame_object()` — so every nation gets the town, camp, king and starting units a real game gives it — and runs all-AI with no `NATION_OWN` nation. Under its pinned seed and knobs it reaches **day 15,411** before one nation is left standing, versus this scenario's 263. It is driven by `scripts/phase4_ai_harness.sh` against its own `scripts/phase4_ai_baseline.txt`. **`run_test()`, `-headless-test-days`, `scripts/phase0_harness.sh` and `scripts/phase0_baseline.txt` were not modified** — the 50/100/200/262-day CRC checkpoints 37/130/124/217 were re-verified unchanged after the addition, and remain the determinism anchor.
 
 **Lightning brightness strobe: dead code, not a live hazard — should it be repaired at all?** Phase 1a set out to add an accessibility toggle for what this document previously described as "a literal abrupt full-screen brightness flash" on lightning weather, a supposed photosensitivity risk. Investigation found the opposite: the brightness-flash branches in `src/OWORLD_Z.cpp :: ZoomMatrix::draw_weather_effects()` test the member `init_lightning` against ranges 101-107, but within that same function `init_lightning` is only ever assigned `0` or `1` (never touched anywhere else in the file). Those branches are therefore unreachable — `newBrightness` always falls through to the `else` case, `-weather.cloud() * config.cloud_darkness`, which has nothing to do with lightning. `config.lightning_brightness` (`include/OCONFIG.h :: lightning_brightness`) is read into `maxBrightness` and then never used. **The flash does nothing today, regardless of its config value.**
 
