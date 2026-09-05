@@ -107,6 +107,14 @@ RED_LIST=(
   # what it caught. See CLAUDE.md.
   "scripts/phase0_harness.sh"
   "scripts/phase0_baseline.txt"
+  # The Phase 4 AI-behaviour harness and its baseline, listed for the same
+  # reason as the Phase 0 pair above. It is the only signal that catches an
+  # AI change the multiplayer CRC cannot see -- that CRC hashes NationBase
+  # only, never the AI state in Nation -- so re-recording its baseline to
+  # match an unreviewed result is exactly the silent-failure mode the Phase 0
+  # entries exist to prevent. See CLAUDE.md.
+  "scripts/phase4_ai_harness.sh"
+  "scripts/phase4_ai_baseline.txt"
   # The hook's own protection surface. A stuck agent that can't get past a
   # block will predictably try to edit or unregister the hook as its own
   # "fix" -- without this, the red list is only as strong as the agent's
