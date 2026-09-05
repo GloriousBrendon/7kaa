@@ -37,6 +37,7 @@ CmdLine::CmdLine()
 	startup_mode = STARTUP_NORMAL;
 	join_host = NULL;
 	harness_days = 0;
+	ai_harness_days = 0;
 }
 
 CmdLine::~CmdLine()
@@ -79,6 +80,12 @@ static int set_startup_mode(StartupMode mode)
 //   Run the built-in test scenario (Battle::run_test) and exit after n
 //   in-game days, printing a HARNESS_CRC/HARNESS_WALLTIME_MS summary line.
 //   Used by scripts/phase0_harness.sh for the deterministic regression check.
+// -headless-ai-days <n>
+//   Run the all-AI economy scenario (Battle::run_ai_test) and exit after n
+//   in-game days, printing a per-day CRC series, a per-day per-nation metric
+//   series and an end-of-run summary. Used by scripts/phase4_ai_harness.sh to
+//   measure AI behaviour. Separate from -headless-test-days on purpose: that
+//   scenario and its baseline are the determinism anchor and never change.
 int CmdLine::init(int argc, char **argv)
 {
 	const char *lobbyJoinOption = "-join";
@@ -91,6 +98,7 @@ int CmdLine::init(int argc, char **argv)
 	const char *speedOption = "-speed";
 	const char *windowOption = "-win";
 	const char *harnessDaysOption = "-headless-test-days";
+	const char *aiHarnessDaysOption = "-headless-ai-days";
 	// Companion to the above for layout review: renders the test scenario and
 	// writes the frame to a BMP so the HUD layout can be inspected at a given
 	// buffer size without a display attached.
@@ -160,6 +168,14 @@ int CmdLine::init(int argc, char **argv)
 			if( !set_startup_mode(STARTUP_TEST) )
 				return 0;
 			harness_days = atoi(argv[++i]);
+		}
+		else if( !strcmp(argv[i], aiHarnessDaysOption) )
+		{
+			if( !have_arg(i, argc, aiHarnessDaysOption) )
+				return 0;
+			if( !set_startup_mode(STARTUP_AI_HARNESS) )
+				return 0;
+			ai_harness_days = atoi(argv[++i]);
 		}
 	}
 	return 1;

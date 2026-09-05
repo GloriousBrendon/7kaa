@@ -47,6 +47,8 @@ public:
 	void	run_loaded();
 	void	run_replay();
 	void	run_test();
+	void	init_ai_test_config();		// must be called before game.init(); see OBATTLE.cpp
+	void	run_ai_test();
 
 private:
 	void 	create_ai_nation(int aiNationCount);

@@ -30,6 +30,7 @@ enum StartupMode
 	STARTUP_MULTI_PLAYER,
 	STARTUP_TEST,
 	STARTUP_DEMO,
+	STARTUP_AI_HARNESS,
 };
 
 struct CmdLine
@@ -41,7 +42,12 @@ struct CmdLine
 	StartupMode	startup_mode;
 	char		*join_host;
 	int		harness_days;	// Phase 0 regression harness: exit after N in-game days (0 = disabled)
+	int		ai_harness_days;	// Phase 4 AI harness: exit after N in-game days (0 = disabled)
 	const char	*screenshot_path;	// dump the rendered frame here and exit (NULL = disabled)
+
+	// True while either headless regression harness is driving the run. Both
+	// suppress interactive game-over handling; see Game::game_end().
+	int		is_harness() const	{ return harness_days > 0 || ai_harness_days > 0; }
 
 	CmdLine();
 	~CmdLine();

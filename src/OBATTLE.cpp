@@ -729,6 +729,179 @@ void Battle::run_test()
 //--------- End of function Battle::run_test ---------//
 
 
+//
+// Phase 4 AI harness scenario. Pinned knobs, all of them recorded in the run
+// header by AiHarness::begin() rather than inherited, so a baseline states the
+// conditions it was measured under.
+//
+// AI_HARNESS_AGGRESSIVENESS is the biggest lever on how much AI behaviour a
+// given day count actually observes. Nation::process_ai_main() picks one of
+// twelve think categories per day with (game_date - nation_recno*4) %
+// intervalDays, where intervalDays is {90,30,15,15} indexed by
+// ai_aggressiveness-OPTION_LOW. At OPTION_LOW each category fires once per 90
+// days - roughly five times across a 500-day run, which is too few to measure.
+// OPTION_HIGH gives a 15-day interval, so all twelve fire about every 15 days.
+//
+enum
+{
+	AI_HARNESS_SEED            = 20260904,
+	AI_HARNESS_NATION_COUNT    = 6,
+	AI_HARNESS_AGGRESSIVENESS  = OPTION_HIGH,
+};
+
+//-------- Begin of function Battle::init_ai_test_config --------//
+//
+// Pin the random seed and every Config field this scenario's outcome depends
+// on. Split out of run_ai_test() and called from AM.cpp because three of these
+// are consumed by Game::init() before run_ai_test() ever gets control:
+//
+//   config.terrain_set             selects which I_TPICT?.RES is loaded
+//   config.random_event_frequency  sets the earthquake frequency, and when it
+//                                  is non-zero also mixes info.random_seed into
+//                                  it - so the seed has to be pinned this early
+//                                  too, not just before world.generate_map()
+//   config.latitude                seeds Weather::init_date()
+//
+// Setting them inside run_ai_test() would silently inherit whatever the loaded
+// CONFIG.DAT had for those three while appearing to pin them.
+//
+// Pinning rather than inheriting matters more here than it does for run_test():
+// run_test()'s outcome does not depend on any of these, this scenario's depends
+// on all of them, and Config::deinit() writes CONFIG.DAT back into $SKCONFIG on
+// exit - so a re-used config dir would feed one run's settings into the next.
+//
+void Battle::init_ai_test_config()
+{
+	//------- seed: before Game::init(), see above -------//
+
+	info.init_random_seed(AI_HARNESS_SEED);
+
+	//------- what the harness actually varies -------//
+
+	config.difficulty_level  = OPTION_CUSTOM;
+	config.ai_nation_count   = AI_HARNESS_NATION_COUNT;
+	config.ai_aggressiveness = AI_HARNESS_AGGRESSIVENESS;
+
+	//------- starting resources -------//
+
+	config.start_up_cash     = OPTION_MODERATE;
+	config.ai_start_up_cash  = OPTION_MODERATE;	// symmetric: no cheat-income head start
+
+	//------- map generation -------//
+
+	config.terrain_set                 = 1;
+	config.latitude                    = 45;
+	config.land_mass                   = OPTION_MODERATE;
+	config.start_up_independent_town   = 15;
+	config.start_up_raw_site           = 6;
+	config.start_up_has_mine_nearby    = 0;
+	config.independent_town_resistance = OPTION_MODERATE;
+
+	//------- what happens during the run -------//
+	//
+	// Weather damage and random events stay off: both inject outcomes that are
+	// not AI decisions, which is noise in a series meant to attribute changes
+	// to an AI toggle. Monsters stay defensive for the same reason. New nations
+	// may emerge, which is what keeps nation_count above 1 - and reaching 1 is
+	// goal_destroy_nation_achieved(), the only win condition still armed.
+
+	config.weather_effect          = 0;
+	config.random_event_frequency  = OPTION_NONE;
+	config.monster_type            = OPTION_MONSTER_DEFENSIVE;
+	config.new_nation_emerge       = 1;
+	config.new_independent_town_emerge = 1;
+	config.random_start_up         = 0;	// fixed 40-villager towns, not a random draw
+
+	//------- visibility -------//
+	//
+	// Not cosmetic: explored/visited state is an AI input, so leaving these to
+	// whatever was inherited would change what the AI can see.
+
+	config.explore_whole_map = 0;
+	config.fog_of_war        = 0;
+	config.blacken_map       = 1;
+
+	//------- cheats off -------//
+
+	config.disable_ai_flag = 0;
+	config.king_undie_flag = 0;
+	config.fast_build      = 0;
+	config.show_ai_info    = 0;
+
+	//------- goals: leave only last-nation-standing armed -------//
+	//
+	// goal_destroy_nation_achieved() (nation_count==1) has no flag and cannot
+	// be disarmed; every other goal would end the run early on a threshold that
+	// has nothing to do with what is being measured.
+
+	config.goal_destroy_monster     = 0;
+	config.goal_population_flag     = 0;
+	config.goal_economic_score_flag = 0;
+	config.goal_total_score_flag    = 0;
+	config.goal_year_limit_flag     = 0;
+}
+//--------- End of function Battle::init_ai_test_config ---------//
+
+
+//-------- Begin of function Battle::run_ai_test --------//
+//
+// An all-AI economy scenario for measuring AI behaviour. Deliberately separate
+// from run_test(): that scenario and scripts/phase0_baseline.txt are the
+// determinism anchor for the whole project and must stay byte-untouched.
+//
+// Unlike run_test(), which hand-rolls a unit brawl with no king and no town,
+// this goes through create_pregame_object() so every nation starts with the
+// town, camp, king and starting units a real game gives it - which is what
+// makes the economic AI (think_build_firm, think_trading, think_town) run at
+// all.
+//
+void Battle::run_ai_test()
+{
+	info.disp_panel();
+
+	// Config and seed are pinned by init_ai_test_config(), which AM.cpp calls
+	// before game.init() because three of those fields are read in there.
+
+	// honor -speed; default to the CPU-bound fast setting, as run_test() does
+	sys.set_speed(cmd_line.game_speed >= 0 ? cmd_line.game_speed : 99, COMMAND_AUTO);
+
+	world.generate_map();
+
+	world.refresh();
+
+	vga_util.blt_buf(0, 0, VGA_WIDTH-1, VGA_HEIGHT-1);
+
+	world.paint();
+
+	//------ create the nations: all AI, no human player ------//
+	//
+	// No NATION_OWN nation is created, so nation_array.player_recno stays 0.
+	// That is the point: OAI_ATTK.cpp biases AI target selection toward the
+	// human player, and with no human in the game that bias cannot skew the
+	// measurement. It also means this harness does not exercise that bias at
+	// all - see the note in scripts/phase4_ai_baseline.txt.
+
+	create_ai_nation(config.ai_nation_count);
+
+	//------ create pregame objects: towns, camps, kings, sites ------//
+
+	create_pregame_object();
+
+	//------- update nation statistic -------//
+
+	nation_array.update_statistic();
+
+	//-- enable power after the game objects have been initialized --//
+
+	power.enable();
+
+	//--- give the control to the system main loop, start the game now ---//
+
+	sys.run();
+}
+//--------- End of function Battle::run_ai_test ---------//
+
+
 //-------- Begin of function Battle::create_test_unit --------//
 //
 void Battle::create_test_unit(int nationRecno)

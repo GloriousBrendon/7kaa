@@ -377,6 +377,19 @@ int main(int argc, char **argv)
 		battle.run_test();
 		game.deinit();
 		break;
+	case STARTUP_AI_HARNESS:
+		// Pins the seed and the Config fields game.init() itself reads
+		// (terrain_set, latitude, random_event_frequency) -- must precede it.
+		battle.init_ai_test_config();
+		game.init();
+		// Not GAME_TEST: Nation::process_ai() returns immediately under that
+		// mode, which would leave the AI harness with no AI. Not GAME_TUTORIAL
+		// either -- that one forces a 120-day think interval and hands the AI
+		// free cash. GAME_SINGLE_PLAYER is the ordinary-game value.
+		game.game_mode = GAME_SINGLE_PLAYER;
+		battle.run_ai_test();
+		game.deinit();
+		break;
 	case STARTUP_DEMO:
 		mouse_cursor.set_icon(CURSOR_NORMAL);
 		sys.disp_fps_flag = 1;

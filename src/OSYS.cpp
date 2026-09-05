@@ -91,6 +91,7 @@
 #include <CmdLine.h>
 #include <FilePath.h>
 #include <ConfigAdv.h>
+#include <OAIHARN.h>
 
 #include <dbglog.h>
 #ifdef USE_WINDOWS
@@ -798,11 +799,17 @@ void Sys::main_loop(int isLoadedGame)
    uint32_t harnessBusyMs = 0;      // cumulative time inside process(), reported only
    uint32_t harnessLoopIters = 0;   // total main_loop iterations, reported only
    uint32_t harnessFrameIters = 0;  // frames actually processed, reported only
-   if( cmd_line.harness_days > 0 )
+   if( cmd_line.is_harness() )
    {
       harnessStartDate = info.game_date;
       harnessWallStartTime = misc.get_time();
    }
+
+   // ---- Phase 4 AI harness: emit the run header now that the nations
+   // exist, then a CRC + per-nation metric row per in-game day below.
+   // See scripts/phase4_ai_harness.sh. ---- //
+   if( cmd_line.ai_harness_days > 0 )
+      ai_harness.begin( cmd_line.ai_harness_days );
 
 
    in_main_loop = 1;
@@ -815,7 +822,7 @@ void Sys::main_loop(int isLoadedGame)
          if( sys.signal_exit_flag )
             break;
 
-         if( cmd_line.harness_days > 0 )
+         if( cmd_line.is_harness() )
             harnessLoopIters++;
 
          vga_front.lock_buf();
@@ -871,7 +878,7 @@ void Sys::main_loop(int isLoadedGame)
 
                uint32_t harnessProcStart = misc.get_time();
                process(); // also calls 'disp_frame()'
-               if( cmd_line.harness_days > 0 )
+               if( cmd_line.is_harness() )
                {
                   harnessBusyMs += misc.get_time() - harnessProcStart;
                   harnessFrameIters++;
@@ -891,6 +898,25 @@ void Sys::main_loop(int isLoadedGame)
                      crc_store.send_frame();
                }
                // ###### patch end Gilbert 20/1 ######//
+
+               // ---- Phase 4 AI harness: one CRC + metric row per day ---- //
+               if( cmd_line.ai_harness_days > 0 )
+               {
+                  ai_harness.record_day();
+
+                  // An early game-over means the scenario resolved before the
+                  // requested day count. That is a hard failure for this
+                  // harness (the script says so); report it and stop.
+                  if( harness_game_over ||
+                      ai_harness.days_elapsed() >= cmd_line.ai_harness_days )
+                  {
+                     ai_harness.finish( harness_game_over,
+                                        misc.get_time() - harnessWallStartTime,
+                                        harnessBusyMs, harnessFrameIters,
+                                        harnessLoopIters );
+                     signal_exit_flag = 1;
+                  }
+               }
 
                // ---- Phase 0 regression harness exit check ---- //
                // harness_game_over is set by Game::game_end() when the

@@ -86,8 +86,11 @@ void Game::game_end(int winNationRecno, int playerDestroyed, int surrenderToNati
 	// Box::ask() after them never returns at all. Record that the scenario
 	// ended and get out; Sys::main_loop()'s harness exit check prints the
 	// summary and stops on the way out of this frame. Gated on the test-only
-	// -headless-test-days flag, so a normal run never takes this branch.
-	if( cmd_line.harness_days > 0 )
+	// -headless-test-days / -headless-ai-days flags, so a normal run never
+	// takes this branch. For the Phase 4 AI harness an early game-over is a
+	// hard failure rather than an expected end, but that verdict belongs to
+	// the script; the engine's job is the same either way - stop and report.
+	if( cmd_line.is_harness() )
 	{
 		sys.harness_game_over = 1;
 		return;
